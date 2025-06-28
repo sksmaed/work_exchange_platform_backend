@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:17.5
+    container_name: work_for_exchange_postgres
+    restart: unless-stopped
+    env_file:
+      - ./dotenv/.env
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DB}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - work_for_exchange_network
+
+  app:
+    build:
+      context: .
+    container_name: work_for_exchange_app
+    restart: unless-stopped
+    env_file:
+      - ./dotenv/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+    volumes:
+      - .:/app
+    networks:
+      - work_for_exchange_network
+
+volumes:
+  postgres_data:
+
+networks:
+  work_for_exchange_network:
+    driver: bridge
