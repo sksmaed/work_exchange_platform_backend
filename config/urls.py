@@ -4,9 +4,9 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include, path
 from django.views import defaults as default_views
 
-urlpatterns = [
-    path("admin/", admin.site.urls),
-]
+from config.api import api
+
+urlpatterns = [path("admin/", admin.site.urls), path("api/", api.urls)]
 
 if settings.DEBUG:
     # This allows the error pages to be debugged during development, just visit

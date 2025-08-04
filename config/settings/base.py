@@ -40,6 +40,8 @@ ALLOWED_HOSTS = env.list(
     default=["localhost", "127.0.0.1", "[::1]"],
 )
 
+AUTH_USER_MODEL = "core.User"
+
 # Storage
 STORAGES = {
     "default": {
@@ -61,9 +63,15 @@ APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "ninja",
+    "ninja_extra",
     "guardian",
 ]
-LOCAL_APPS = []
+LOCAL_APPS = [
+    "features.core",
+    "features.helper",
+    "features.host",
+]
 INSTALLED_APPS = APPS + LOCAL_APPS
 
 MIDDLEWARE = [
