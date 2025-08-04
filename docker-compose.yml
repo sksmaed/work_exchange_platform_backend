@@ -26,7 +26,7 @@ services:
     build:
       context: .
     container_name: work_for_exchange_app
-    restart: unless-stopped
+    restart: no
     env_file:
       - ./dotenv/.env
     ports:
