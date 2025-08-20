@@ -44,3 +44,13 @@ tzdata==2025.2 ; sys_platform == 'win32'
 uvicorn==0.35.0
 valkey==6.1.0
 virtualenv==20.31.2
+
+# Additional dependencies for headless authentication
+djangorestframework==3.16.1
+dj-rest-auth==7.0.1
+djangorestframework-simplejwt==5.5.1
+
+# Additional dependencies for allauth
+requests==2.32.4
+PyJWT==2.10.1
+cryptography==45.0.6

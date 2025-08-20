@@ -1,0 +1,9 @@
+from django.apps import AppConfig
+
+
+class CoreConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'features.core'
+
+    def ready(self):
+        import features.core.signals  # noqa 

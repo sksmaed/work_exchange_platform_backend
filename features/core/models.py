@@ -20,7 +20,14 @@ class User(AbstractUser, BaseModel):
         Optional user avatar image.
     last_login_ip : str
         Last login IP address (IPv4).
+    user_type : str
+        Type of user: 'helper', 'host', or 'both'.
     """
+
+    class UserTypeChoices(models.TextChoices):
+        HELPER = "helper", "Helper"
+        HOST = "host", "Host"
+        BOTH = "both", "Both Helper and Host"
 
     name = models.CharField(
         blank=True,
@@ -43,3 +50,20 @@ class User(AbstractUser, BaseModel):
         blank=True,
         null=True,
     )
+    user_type = models.CharField(
+        max_length=10,
+        choices=UserTypeChoices.choices,
+        default=UserTypeChoices.HELPER,
+        help_text="Type of user: helper, host, or both"
+    )
+
+    def get_full_name(self):
+        """Return the full name of the user."""
+        return self.name or self.email
+
+    def get_short_name(self):
+        """Return the short name of the user."""
+        return self.name or self.email
+
+    def __str__(self):
+        return self.email

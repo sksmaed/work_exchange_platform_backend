@@ -1,6 +1,7 @@
 import os
 from ast import literal_eval
 from pathlib import Path
+from datetime import timedelta
 
 import environ
 
@@ -60,9 +61,17 @@ APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",  # Required for allauth
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    # "allauth.headless",  # This module doesn't exist in this version
+    "rest_framework",  # Django REST Framework
+    "rest_framework.authtoken",  # Required for dj-rest-auth
+    "rest_framework_simplejwt",  # JWT authentication
+    "dj_rest_auth",  # REST API for allauth
+    "dj_rest_auth.registration",  # Registration endpoints
     "ninja",
     "ninja_extra",
     "guardian",
@@ -156,9 +165,54 @@ ACCOUNT_LOGOUT_ON_GET = True
 ACCOUNT_LOGOUT_REDIRECT_URL = env("ACCOUNT_LOGOUT_REDIRECT_URL", default="")
 ACCOUNT_USER_MODEL_USERNAME_FIELD = "name"
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
-ACCOUNT_AUTHENTICATION_METHOD = "email"
+ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
+
+# Allauth Headless API settings
+# NOTE: allauth.headless module doesn't exist in this version
+# ACCOUNT_HEADLESS_ENABLED = True
+# ACCOUNT_HEADLESS_ONLY = True
+
+# Social account settings for Google login
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
+
+# Django REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+# Simple JWT settings
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+}
+
+# dj-rest-auth settings
+REST_AUTH = {
+    'USE_JWT': True,
+    'JWT_AUTH_COOKIE': 'access_token',
+    'JWT_AUTH_REFRESH_COOKIE': 'refresh_token',
+    'USER_DETAILS_SERIALIZER': 'dj_rest_auth.serializers.UserDetailsSerializer',
+}
 
 # Password validation
 PASSWORD_HASHERS = [

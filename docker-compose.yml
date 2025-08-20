@@ -4,7 +4,7 @@ services:
     container_name: work_for_exchange_postgres
     restart: unless-stopped
     env_file:
-      - ./dotenv/.env
+      - .env
     environment:
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
@@ -28,7 +28,7 @@ services:
     container_name: work_for_exchange_app
     restart: no
     env_file:
-      - ./dotenv/.env
+      - .env
     ports:
       - "8000:8000"
     depends_on:

@@ -12,6 +12,8 @@ api = NinjaExtraAPI(
     docs_url="docs/",
 )
 
+# Note: Authentication is now handled by allauth.headless at /api/auth/
+# This API is for other business logic endpoints
 
 @api.exception_handler(BaseAPIException)
 def base_exception_handler(request: WSGIRequest, exc: BaseAPIException):  # noqa: ARG001
@@ -32,3 +34,11 @@ def api_root_health_check(request: WSGIRequest):  # noqa: ARG001
 def health_check(request: WSGIRequest):  # noqa: ARG001
     """Check api health."""
     return {"status": "healthy"}
+
+
+# Future business logic endpoints can be added here
+# Example:
+# from features.helper.api import router as helper_router
+# from features.host.api import router as host_router
+# api.add_router("/helpers/", helper_router)
+# api.add_router("/hosts/", host_router)

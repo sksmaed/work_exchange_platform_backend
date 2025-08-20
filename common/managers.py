@@ -15,7 +15,11 @@ class BaseModelManager(Manager):
         Returns:
             QuerySet: QuerySet object.
         """
-        return super().get_queryset().exclude(is_deleted=True)
+        queryset = super().get_queryset()
+        # Only apply is_deleted filter if the field exists on the model
+        if hasattr(self.model, 'is_deleted'):
+            queryset = queryset.exclude(is_deleted=True)
+        return queryset
 
     def bulk_create(  # noqa: PLR0913
         self,

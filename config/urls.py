@@ -3,10 +3,29 @@ from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include, path
 from django.views import defaults as default_views
+from django.shortcuts import redirect
 
 from config.api import api
 
-urlpatterns = [path("admin/", admin.site.urls), path("api/", api.urls)]
+urlpatterns = [
+    # Django Admin Interface
+    path("admin/", admin.site.urls),
+    # Traditional allauth UI routes (for admin interface)
+    path("accounts/", include("allauth.urls")),
+    
+    # Allauth Headless API - Handles all authentication
+    # This provides: signup, login, logout, password reset, etc.
+    # Using dj-rest-auth for headless authentication
+    path("api/auth/", include("dj_rest_auth.urls")),
+    path("api/auth/registration/", include("dj_rest_auth.registration.urls")),
+    
+    # Custom Business Logic API - Handles business operations
+    # This is for: helper profiles, host profiles, matching, etc.
+    path("api/", api.urls),
+    
+    # Redirect root to admin for now
+    path("", lambda request: redirect("admin/")),  # noqa: ARG005
+]
 
 if settings.DEBUG:
     # This allows the error pages to be debugged during development, just visit
