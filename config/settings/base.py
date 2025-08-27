@@ -1,7 +1,7 @@
 import os
 from ast import literal_eval
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 
 import environ
 
@@ -9,10 +9,7 @@ ROOT_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 
 DISABLE_DOT_ENV = os.environ.get("DISABLE_DOT_ENV", default="False")
 
-if (ROOT_DIR / "dotenv" / ".env").exists():
-    DOT_ENV_PATH = ROOT_DIR / "dotenv" / ".env"
-else:
-    DOT_ENV_PATH = ROOT_DIR / "dotenv" / ".env.example"
+DOT_ENV_PATH = ROOT_DIR / ".env" if (ROOT_DIR / ".env").exists() else ROOT_DIR / ".env.example"
 
 env = environ.Env()
 if DISABLE_DOT_ENV != "True":
@@ -143,6 +140,7 @@ DATABASES["default"]["PASSWORD"] = env("DATABASE_PASSWORD")
 CACHES = {
     "default": {
         "BACKEND": env("CACHES_BACKEND", default="django_valkey.cache.ValkeyCache"),
+        "LOCATION": env("CACHES_LOCATION", default="redis://localhost:6379/0"),
     },
 }
 
@@ -169,49 +167,44 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
 
-# Allauth Headless API settings
-# NOTE: allauth.headless module doesn't exist in this version
-# ACCOUNT_HEADLESS_ENABLED = True
-# ACCOUNT_HEADLESS_ONLY = True
-
 # Social account settings for Google login
 SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'SCOPE': [
-            'profile',
-            'email',
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
         ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
-        }
+        "AUTH_PARAMS": {
+            "access_type": "online",
+        },
     }
 }
 
 # Django REST Framework settings
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
 }
 
 # Simple JWT settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
 }
 
 # dj-rest-auth settings
 REST_AUTH = {
-    'USE_JWT': True,
-    'JWT_AUTH_COOKIE': 'access_token',
-    'JWT_AUTH_REFRESH_COOKIE': 'refresh_token',
-    'USER_DETAILS_SERIALIZER': 'dj_rest_auth.serializers.UserDetailsSerializer',
+    "USE_JWT": True,
+    "JWT_AUTH_COOKIE": "access_token",
+    "JWT_AUTH_REFRESH_COOKIE": "refresh_token",
+    "USER_DETAILS_SERIALIZER": "dj_rest_auth.serializers.UserDetailsSerializer",
 }
 
 # Password validation

@@ -31,18 +31,32 @@ work for exchange system backend in Django
     .venv\Scripts\activate
     ```
 
-3. Set up the `dotenv/.env` file
+3. Set up the `.env` file
 
 4. Build and run the docker container:
 
     ```sh
-    docker-compose --env-file dotenv/.env up --build -d
+    docker-compose up --build -d
     ```
 
-5. For the first time running the backend system, you need to create a superuser.
+5. synchronize the packages for this project.
 
     ```sh
-    docker-compose exec app python manage.py createsuperuser
+    uv sync
     ```
 
-6. visit <http:localhost:8000> and login to Django admin system.
+6. Apply migrations to database.
+
+    ```sh
+    python manage.py migrate
+    ```
+
+7. visit <http:localhost:8000> and login to Django admin system.
+
+## Note
+
+- For the first time setting up Django service, you should create the superuser
+
+    ```sh
+    python manage.py createsuperuser
+    ```
