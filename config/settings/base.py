@@ -72,6 +72,7 @@ APPS = [
     "ninja",
     "ninja_extra",
     "guardian",
+    "features.helper.resume",  # helper resume app
 ]
 LOCAL_APPS = [
     "features.core",

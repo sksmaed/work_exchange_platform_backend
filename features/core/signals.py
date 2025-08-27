@@ -18,42 +18,42 @@ def create_user_profiles(sender: User, instance: User, created: bool, **kwargs: 
     if created:
         with transaction.atomic():
             if instance.user_type in [User.UserTypeChoices.HELPER, User.UserTypeChoices.BOTH]:
-                HelperModel.objects.create(
+                HelperModel._default_manager.create(
                     user=instance,
                     description="New helper profile",
                     birthday=timezone.now().date(),
-                    gender="",  # Will be filled by user later
-                    residence="",  # Will be filled by user later
-                    expected_place=[],  # Empty list for now
-                    expected_time_periods=[],  # Empty list for now
-                    expected_treatments=[],  # Empty list for now
-                    personality="",  # Will be filled by user later
-                    motivation="",  # Will be filled by user later
-                    hobbits="",  # Will be filled by user later
+                    gender="",
+                    residence="",
+                    expected_place=[],
+                    expected_time_periods=[],
+                    expected_treatments=[],
+                    personality="",
+                    motivation="",
+                    hobbits="",
                     licenses=HelperModel.LicenseChoices.NONE,
-                    languages=[],  # Empty list for now
+                    languages=[],
                     avg_rating=0.0,
                 )
 
             if instance.user_type in [User.UserTypeChoices.HOST, User.UserTypeChoices.BOTH]:
-                HostModel.objects.create(
+                HostModel._default_manager.create(
                     user=instance,
                     description="New host profile",
-                    address="",  # Will be filled by user later
-                    type="General",  # Default type
-                    contact_information="",  # Will be filled by user later
-                    pocket_money=0,  # Default value
-                    meals_offered="",  # Will be filled by user later
-                    dayoffs="",  # Will be filled by user later
-                    allowance="",  # Will be filled by user later
-                    facilities="",  # Will be filled by user later
-                    other="",  # Will be filled by user later
-                    expected_duration="",  # Will be filled by user later
-                    expected_licenses="",  # Will be filled by user later
-                    expected_age="",  # Will be filled by user later
-                    expected_gender="",  # Will be filled by user later
-                    expected_personality="",  # Will be filled by user later
-                    expected_other_requirements="",  # Will be filled by user later
-                    recruitment_slogan="",  # Will be filled by user later
+                    address="",
+                    type="General",
+                    contact_information="",
+                    pocket_money=0,
+                    meals_offered="",
+                    dayoffs="",
+                    allowance="",
+                    facilities="",
+                    other="",
+                    expected_duration="",
+                    expected_licenses="",
+                    expected_age="",
+                    expected_gender="",
+                    expected_personality="",
+                    expected_other_requirements="",
+                    recruitment_slogan="",
                     avg_rating=0.0,
                 )
