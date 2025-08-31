@@ -18,14 +18,16 @@ from features.helper.resume.schemas import ResumeCreate, ResumeOut, ResumeUpdate
 class HelperResumeAPI:
     """API for helper resume CRUD for the authenticated user."""
 
-    @route.get("/", response={200: ResumeOut}, url_name="get_self_resume")
-    def get_self_resume(self, request: WSGIRequest):  # noqa: D401
+    @route.get("/self/", response={200: ResumeOut}, url_name="get_self_resume")
+    def get_self_resume(self, request: WSGIRequest):
+        """Retrieve the authenticated user's resume."""
         helper = get_object_or_404(HelperModel, user=request.user)
         resume = get_object_or_404(HelperResume, helper=helper)
         return 200, self._to_schema(resume)
 
     @route.post("/", response={201: ResumeOut}, url_name="create_resume")
-    def create_resume(self, request: WSGIRequest, payload: ResumeCreate):  # noqa: D401
+    def create_resume(self, request: WSGIRequest, payload: ResumeCreate):
+        """Create a new resume for the authenticated user."""
         helper = get_object_or_404(HelperModel, user=request.user)
         resume = HelperResume.objects.create(
             helper=helper,
@@ -42,7 +44,8 @@ class HelperResumeAPI:
         return 201, self._to_schema(resume)
 
     @route.put("/", response={200: ResumeOut}, url_name="update_resume")
-    def update_resume(self, request: WSGIRequest, payload: ResumeUpdate):  # noqa: D401
+    def update_resume(self, request: WSGIRequest, payload: ResumeUpdate):
+        """Update the authenticated user's resume."""
         helper = get_object_or_404(HelperModel, user=request.user)
         resume = get_object_or_404(HelperResume, helper=helper)
 
