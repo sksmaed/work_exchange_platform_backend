@@ -76,7 +76,7 @@ class BaseModelManager(Manager):
         user: AbstractBaseUser | UUID | str | None = None,
         **kwargs: dict[str, Any],
     ):
-        """Overwritten get_or_create method for setting created_by and updated_by fields."""
+        """Overwritten create method for setting created_by and updated_by fields."""
         if user is not None:
             if isinstance(user, AbstractBaseUser):
                 kwargs.setdefault("created_by_user", user)
@@ -90,12 +90,14 @@ class BaseModelManager(Manager):
 
     def get_or_create(
         self,
-        defaults: dict[str, Any] = ...,
+        defaults: dict[str, Any] | None = None,
         user: AbstractBaseUser | UUID | str | None = None,
         **kwargs: dict[str, Any],
     ):
         """Overwritten get_or_create method for setting created_by and updated_by fields."""
         if user is not None:
+            if defaults is None:
+                defaults = {}
             if isinstance(user, AbstractBaseUser):
                 defaults.setdefault("created_by_user", user)
                 defaults.setdefault("updated_by_user", user)
@@ -104,4 +106,4 @@ class BaseModelManager(Manager):
                     user = UUID(user)
                 defaults.setdefault("created_by_user_id", user)
                 defaults.setdefault("updated_by_user_id", user)
-        return super().get_or_create(defaults, **kwargs)
+        return super().get_or_create(defaults=defaults, **kwargs)

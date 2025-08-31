@@ -36,9 +36,7 @@ def health_check(request: WSGIRequest):  # noqa: ARG001
     return {"status": "healthy"}
 
 
-# Future business logic endpoints can be added here
-# Example:
-# from features.helper.api import router as helper_router
-# from features.host.api import router as host_router
-# api.add_router("/helpers/", helper_router)
-# api.add_router("/hosts/", host_router)
+# Register feature controllers
+from features.helper.resume.apis import HelperResumeAPI  # noqa: E402
+
+api.register_controllers(HelperResumeAPI)
