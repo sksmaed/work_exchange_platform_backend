@@ -81,7 +81,7 @@ class HelperModel(BaseModel):
         blank=True,
         default="",
     )
-    hobbits = models.TextField(
+    hobbies = models.TextField(
         blank=True,
         default="",
     )
