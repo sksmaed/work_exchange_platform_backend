@@ -33,8 +33,14 @@ class User(AbstractUser, BaseModel):
         blank=True,
         max_length=255,
     )
-    first_name = None
-    last_name = None
+    first_name = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+    last_name = models.CharField(
+        max_length=150,
+        blank=True,
+    )
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(
         unique=True,
@@ -44,7 +50,6 @@ class User(AbstractUser, BaseModel):
         blank=True,
         null=True,
     )
-    date_joined = None
     last_login_ip = models.GenericIPAddressField(
         protocol="IPv4",
         blank=True,
@@ -54,7 +59,7 @@ class User(AbstractUser, BaseModel):
         max_length=10,
         choices=UserTypeChoices.choices,
         default=UserTypeChoices.HELPER,
-        help_text="Type of user: helper, host, or both"
+        help_text="Type of user: helper, host, or both",
     )
 
     def get_full_name(self):
@@ -65,5 +70,6 @@ class User(AbstractUser, BaseModel):
         """Return the short name of the user."""
         return self.name or self.email
 
-    def __str__(self):
-        return self.email
+    def __str__(self) -> str:
+        """Return a string representation of the user."""
+        return self.name
