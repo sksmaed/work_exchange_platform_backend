@@ -96,3 +96,10 @@ section-order = [
 [tool.ruff.lint.per-file-ignores]
 "test_*.py" = ["ARG001", "PLR2004", "S106"]
 "tests/conftest.py" = ["ARG001", "PLR2004", "S106"]
+
+[dependency-groups]
+dev = [
+    "django-query-inspector>=1.3.0",
+    "pytest>=8.4.2",
+    "pytest-django>=4.11.1",
+]

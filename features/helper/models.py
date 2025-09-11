@@ -32,8 +32,8 @@ class HelperModel(BaseModel):
         Motivation for helping.
     hobbits : TextField
         Hobbies of the helper.
-    license : CharField
-        Type of license the helper holds.
+    licenses : CharField
+        Type of licenses the helper holds.
     languages : JSONField
         Languages spoken by the helper.
     avg_rating : FloatField
