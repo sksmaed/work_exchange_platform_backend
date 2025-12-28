@@ -63,6 +63,7 @@ APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.facebook",
     # "allauth.headless",  # This module doesn't exist in this version
     "rest_framework",  # Django REST Framework
     "rest_framework.authtoken",  # Required for dj-rest-auth
@@ -168,7 +169,7 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
 
-# Social account settings for Google login
+# Social account settings for Google and Facebook login
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "SCOPE": [
@@ -178,7 +179,29 @@ SOCIALACCOUNT_PROVIDERS = {
         "AUTH_PARAMS": {
             "access_type": "online",
         },
-    }
+    },
+    "facebook": {
+        "METHOD": "oauth2",
+        "SDK_URL": "//connect.facebook.net/{locale}/sdk.js",
+        "SCOPE": ["email", "public_profile"],
+        "AUTH_PARAMS": {"auth_type": "reauthenticate"},
+        "INIT_PARAMS": {"cookie": True},
+        "FIELDS": [
+            "id",
+            "first_name",
+            "last_name",
+            "middle_name",
+            "name",
+            "name_format",
+            "picture",
+            "short_name",
+            "email",
+        ],
+        "EXCHANGE_TOKEN": True,
+        "LOCALE_FUNC": lambda _: "en_US",
+        "VERIFIED_EMAIL": False,
+        "VERSION": "v20.0",
+    },
 }
 
 # Django REST Framework settings
