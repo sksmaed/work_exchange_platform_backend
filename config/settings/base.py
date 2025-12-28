@@ -78,7 +78,7 @@ LOCAL_APPS = [
     "features.core",
     "features.helper",
     "features.host",
-    "features.helper.resume",
+    "features.application",
 ]
 INSTALLED_APPS = APPS + LOCAL_APPS
 

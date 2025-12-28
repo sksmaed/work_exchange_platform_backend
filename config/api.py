@@ -4,8 +4,9 @@ from ninja.openapi.docs import Redoc
 from ninja_extra import NinjaExtraAPI
 
 from common.exceptions import BaseAPIException
+from features.application.apis import ApplicationControllerAPI
 from features.core.api import SocialAuthController
-from features.helper.resume.apis import HelperResumeAPI
+from features.helper.apis import HelperControllerAPI
 from features.host.apis import HostControllerAPI
 
 api = NinjaExtraAPI(
@@ -37,6 +38,7 @@ def health_check(request: WSGIRequest):  # noqa: ARG001
     return {"status": "healthy"}
 
 
-api.register_controllers(HelperResumeAPI)
+api.register_controllers(HelperControllerAPI)
+api.register_controllers(ApplicationControllerAPI)
 api.register_controllers(SocialAuthController)
 api.register_controllers(HostControllerAPI)

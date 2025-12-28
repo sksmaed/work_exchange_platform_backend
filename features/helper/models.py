@@ -32,6 +32,8 @@ class HelperModel(BaseModel):
         Motivation for helping.
     hobbits : TextField
         Hobbies of the helper.
+    work_experience : TextField
+        Work experience of the helper.
     licenses : CharField
         Type of licenses the helper holds.
     languages : JSONField
@@ -82,6 +84,10 @@ class HelperModel(BaseModel):
         default="",
     )
     hobbies = models.TextField(
+        blank=True,
+        default="",
+    )
+    work_experience = models.TextField(
         blank=True,
         default="",
     )
