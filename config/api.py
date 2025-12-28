@@ -4,6 +4,9 @@ from ninja.openapi.docs import Redoc
 from ninja_extra import NinjaExtraAPI
 
 from common.exceptions import BaseAPIException
+from features.core.api import SocialAuthController
+from features.helper.resume.apis import HelperResumeAPI
+from features.host.apis import HostControllerAPI
 
 api = NinjaExtraAPI(
     title="Work Exchange Platform API",
@@ -12,8 +15,6 @@ api = NinjaExtraAPI(
     docs_url="docs/",
 )
 
-# Note: Authentication is now handled by allauth.headless at /api/auth/
-# This API is for other business logic endpoints
 
 @api.exception_handler(BaseAPIException)
 def base_exception_handler(request: WSGIRequest, exc: BaseAPIException):  # noqa: ARG001
@@ -36,7 +37,6 @@ def health_check(request: WSGIRequest):  # noqa: ARG001
     return {"status": "healthy"}
 
 
-# Register feature controllers
-from features.helper.resume.apis import HelperResumeAPI  # noqa: E402
-
 api.register_controllers(HelperResumeAPI)
+api.register_controllers(SocialAuthController)
+api.register_controllers(HostControllerAPI)
