@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from features.core.models import User
 from features.helper.models import HelperModel
-from features.host.models import HostModel
+from features.host.models import Host
 
 
 @receiver(user_signed_up, sender=User)
@@ -36,7 +36,7 @@ def create_user_profiles(sender: User, instance: User, created: bool, **kwargs: 
                 )
 
             if instance.user_type in [User.UserTypeChoices.HOST, User.UserTypeChoices.BOTH]:
-                HostModel._default_manager.create(
+                Host._default_manager.create(
                     user=instance,
                     description="New host profile",
                     address="",
