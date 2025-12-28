@@ -1,26 +1,23 @@
 from ninja import ModelSchema, Schema
 
-from features.host.models import HostModel
+from features.host.models import Host
 
 
 class HostResponseSchema(ModelSchema):
-    """Schema for HostModel response."""
+    """Schema for Host response."""
 
     exclude_children: bool | None = None
 
-    class Config:
-        model = HostModel
+    class Meta:
+        model = Host
         exclude = (
             "updated_at",
             "updated_by_user",
-            "is_deleted",
-            "deleted_at",
-            "deleted_by_user",
         )
 
 
 class HostCreateSchema(Schema):
-    """Schema for creating a new HostModel."""
+    """Schema for creating a new Host."""
 
     description: str
     address: str
@@ -42,7 +39,7 @@ class HostCreateSchema(Schema):
 
 
 class HostUpdateSchema(Schema):
-    """Schema for updating HostModel."""
+    """Schema for updating Host."""
 
     description: str | None = None
     type: str | None = None

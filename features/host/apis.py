@@ -8,7 +8,7 @@ from ninja_extra.searching import Searching, searching
 
 from common.exceptions import Http403ForbiddenException, KeyNotFoundException
 from features.host.exceptions import HostNotFoundError
-from features.host.models import HostModel
+from features.host.models import Host
 from features.host.schemas import HostCreateSchema, HostResponseSchema, HostUpdateSchema
 
 
@@ -27,7 +27,7 @@ class HostControllerAPI:
         host_type: str | None = None,
         month: int | None = None,
         duration: str | None = None,
-    ) -> QuerySet[HostModel]:
+    ) -> QuerySet[Host]:
         """Retrieve a list of hosts created by the authenticated user, with optional filtering by frequency."""
         user = request.user
 
@@ -42,21 +42,21 @@ class HostControllerAPI:
         if duration:
             filters &= Q(expected_duration=duration)
 
-        exclude_children_subquery = HostModel.objects.filter(id=OuterRef("id")).exclude(
+        exclude_children_subquery = Host.objects.filter(id=OuterRef("id")).exclude(
             Q(expected_age__icontains="18") | Q(expected_age="")
         )
 
         return (
-            HostModel.objects.filter(filters)
+            Host.objects.filter(filters)
             .annotate(exclude_children=Exists(exclude_children_subquery))
             .select_related("user")
         )
 
     @route.post("", response=HostResponseSchema)
-    def create_host(self, request: WSGIRequest, data: HostCreateSchema) -> HostModel:
+    def create_host(self, request: WSGIRequest, data: HostCreateSchema) -> Host:
         """Create a new host entry."""
         user = request.user
-        host = HostModel(
+        host = Host(
             user=user,
             description=data.description,
             address=data.address,
@@ -80,13 +80,13 @@ class HostControllerAPI:
         return host
 
     @route.patch("/{host_id}", response=HostResponseSchema)
-    def update_host(self, request: WSGIRequest, host_id: str, data: HostUpdateSchema) -> HostModel:
+    def update_host(self, request: WSGIRequest, host_id: str, data: HostUpdateSchema) -> Host:
         """Update an existing host entry."""
         user = request.user
 
         try:
-            host = HostModel.objects.get(id=host_id)
-        except HostModel.DoesNotExist:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
             raise KeyNotFoundException(HostNotFoundError, host_id)
 
         if host.user != user:
@@ -104,7 +104,7 @@ class HostControllerAPI:
         """Delete a host entry."""
         user = request.user
 
-        host = HostModel.objects.filter(id=host_id).first()
+        host = Host.objects.filter(id=host_id).first()
         if not host:
             raise KeyNotFoundException(HostNotFoundError, host_id)
 

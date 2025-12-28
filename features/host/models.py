@@ -1,21 +1,26 @@
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 from common.models import BaseModel
 
 
-class HostModel(BaseModel):
+class Host(BaseModel):
     """Represents a host in the work exchange platform.
 
     Attributes:
     ----------
     user : ForeignKey
         Reference to the associated user.
+    name : CharField
+        Name of the host.
     description : TextField
         Description of the host.
     address : CharField
         Address of the host.
     type : CharField
         Type of host.
+    phone_number : CharField
+        Phone number of the host.
     contact_information : TextField
         Contact information for the host.
     pocket_money : IntegerField
@@ -52,7 +57,9 @@ class HostModel(BaseModel):
         "core.User",
         on_delete=models.CASCADE,
     )
-    description = models.TextField()
+    name: models.CharField(
+        max_length=100,
+    )
     address = models.CharField(
         max_length=100,
         default="",
@@ -60,10 +67,14 @@ class HostModel(BaseModel):
     type = models.CharField(
         max_length=50,
     )
+    phone_number = models.CharField(
+        max_length=15,
+    )
     contact_information = models.TextField(
         blank=True,
         default="",
     )
+    description = models.TextField()
     pocket_money = models.IntegerField(
         default=0,
     )
@@ -73,11 +84,6 @@ class HostModel(BaseModel):
         default="",
     )
     dayoffs = models.CharField(
-        max_length=100,
-        blank=True,
-        default="",
-    )
-    allowance = models.CharField(
         max_length=100,
         blank=True,
         default="",
@@ -96,40 +102,109 @@ class HostModel(BaseModel):
         default="",
     )
 
-    class LicenseChoices(models.TextChoices):
+    class VehicleChoices(models.TextChoices):
         NONE = "None", "None"
         DRIVING = "Driving", "Driving License"
         MOTORCYCLE = "Motorcycle", "Motorcycle License"
         BOTH = "Both", "Both Licenses"
 
-    expected_licenses = models.CharField(
+    vehicle = models.CharField(
         max_length=20,
-        choices=LicenseChoices.choices,
-        default=LicenseChoices.NONE,
-    )
-    expected_age = models.CharField(
-        max_length=50,
-        blank=True,
-        default="",
-    )
-    expected_gender = models.CharField(
-        max_length=10,
-        blank=True,
-        default="",
-    )
-    expected_personality = models.TextField(
-        blank=True,
-        default="",
-    )
-    expected_other_requirements = models.TextField(
-        blank=True,
-        default="",
+        choices=VehicleChoices.choices,
+        default=VehicleChoices.NONE,
     )
     recruitment_slogan = models.TextField(
         blank=True,
         default="",
     )
+    host_image = models.ImageField(
+        upload_to="host_images",
+        blank=True,
+        null=True,
+    )
     avg_rating = models.FloatField(
         default=0.0,
         blank=True,
+    )
+
+
+class Vacancy(BaseModel):
+    """Represents a vacancy in the work exchange platform.
+
+    Attributes:
+    ----------
+    host : ForeignKey
+        Reference to the associated host.
+    name : CharField
+        Name of the vacancy.
+    work_time : CharField
+        Work time of the vacancy.
+    description : TextField
+        Description of the vacancy.
+    expected_duration : CharField
+        Expected duration of the vacancy.
+    expected_age : CharField
+        Expected age of the vacancy.
+    expected_gender : CharField
+        Expected gender of the vacancy.
+    expected_licenses : CharField
+        Expected licenses of the vacancy.
+    expected_personality : TextField
+        Expected personality of the vacancy.
+    expected_other_requirements : TextField
+        Expected other requirements of the vacancy.
+    other_questions : ArrayField
+        Other questions of the vacancy.
+    vacancy_image : ImageField
+        Image of the vacancy.
+    status : CharField
+        Status of the vacancy.
+    """
+
+    host = models.ForeignKey(
+        "host.Host",
+        on_delete=models.CASCADE,
+    )
+    name = models.CharField(
+        max_length=100,
+    )
+    work_time = models.CharField(
+        max_length=100,
+    )
+    description = models.TextField()
+
+    expected_duration = models.CharField(
+        max_length=100,
+    )
+    expected_age = models.CharField(
+        max_length=100,
+    )
+    expected_gender = models.CharField(
+        max_length=100,
+    )
+    expected_licenses = models.CharField(
+        max_length=100,
+    )
+    expected_personality = models.TextField()
+    expected_other_requirements = models.TextField()
+    other_questions = ArrayField(
+        models.CharField(max_length=100),
+        blank=True,
+        default=list,
+    )
+    vacancy_image = models.ImageField(
+        upload_to="vacancy_images",
+        blank=True,
+        null=True,
+    )
+
+    class StatusChoices(models.TextChoices):
+        RECRUITING = "Recruiting", "Recruiting"
+        FULL = "Full", "Full"
+        UNAVAILABLE = "Unavailable", "Unavailable"
+
+    status = models.CharField(
+        max_length=20,
+        choices=StatusChoices.choices,
+        default=StatusChoices.RECRUITING,
     )
