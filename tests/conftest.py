@@ -19,16 +19,15 @@ def _get_models():
     from django.test import Client  # noqa: PLC0415
 
     from features.helper.models import HelperModel  # noqa: PLC0415
-    from features.helper.resume.models import HelperResume  # noqa: PLC0415
     from features.host.models import Host, Vacancy  # noqa: PLC0415
 
-    return AbstractUser, Client, cache, HelperModel, HelperResume, Host, Vacancy
+    return AbstractUser, Client, cache, HelperModel, Host, Vacancy
 
 
 @pytest.fixture(autouse=True)
 def clear_cache_after_test():
     """Automatically clear cache after each test."""
-    _, _, cache, _, _, _, _ = _get_models()
+    _, _, cache, _, _, _ = _get_models()
     yield
     cache.clear()
 
@@ -36,14 +35,14 @@ def clear_cache_after_test():
 @pytest.fixture(scope="session")
 def client():
     """Django test client."""
-    _, Client, _, _, _, _, _ = _get_models()
+    _, Client, _, _, _, _ = _get_models()
     return Client()
 
 
 @pytest.fixture(scope="session")
 def superuser_client():
     """Django test client."""
-    _, Client, _, _, _, _, _ = _get_models()
+    _, Client, _, _, _, _ = _get_models()
     return Client()
 
 
@@ -58,7 +57,7 @@ HTTP_OK = 200
 @pytest.fixture
 def user(db):
     """Create a user with verified email."""
-    AbstractUser, _, _, _, _, _, _ = _get_models()
+    AbstractUser, _, _, _, _, _ = _get_models()
     User = _get_user_model()
     user = User.objects.create_user(
         email=TEST_USER_EMAIL, password=TEST_PASSWORD, username=TEST_USER_NAME, user_type=User.UserTypeChoices.HELPER
@@ -105,7 +104,7 @@ def authenticated_superuser_client(superuser_client, superuser):
 @pytest.fixture
 def helper_model(user, db):
     """Create a helper model."""
-    _, _, _, HelperModel, _, _, _ = _get_models()
+    _, _, _, HelperModel, _, _ = _get_models()
     helper = HelperModel.objects.create(
         user_id=user.id,
         description="Test helper description",
@@ -131,7 +130,7 @@ def helper_model(user, db):
 def authenticated_helper_client(user, helper_model, db):
     """Authenticate a helper client."""
     # Create a fresh client to avoid cookie conflicts
-    _, Client, _, _, _, _, _ = _get_models()
+    _, Client, _, _, _, _ = _get_models()
     client = Client()
     
     # Ensure helper_model.user matches the user fixture
@@ -149,27 +148,6 @@ def authenticated_helper_client(user, helper_model, db):
     assert response.status_code == HTTP_OK, f"Login failed: {response.content}"
     client.cookies.update(response.cookies)
     return client
-
-
-@pytest.fixture
-def helper_resume(helper_model, db):
-    """Create a helper resume."""
-    _, _, _, _, HelperResume, _, _ = _get_models()
-    return HelperResume.objects.create(
-        helper=helper_model,
-        title="Professional Helper",
-        summary="Experienced helper with excellent skills",
-        experiences=[
-            {"title": "Home Assistant", "company": "ABC Family", "duration": "2 years"},
-            {"title": "Cleaner", "company": "XYZ Company", "duration": "1 year"},
-        ],
-        skills=["Cleaning", "Cooking", "Elderly Care"],
-        certifications=["First Aid Certificate", "CPR Certification"],
-        availability=[{"day": "Monday", "time": "9:00-17:00"}, {"day": "Tuesday", "time": "9:00-17:00"}],
-        preferred_locations=["Taipei", "New Taipei"],
-        contact_email="helper@example.com",
-        contact_phone="+886912345678",
-    )
 
 
 @pytest.fixture
@@ -191,7 +169,7 @@ def host_user(db):
 @pytest.fixture
 def host(host_user, db):
     """Create a host model."""
-    _, _, _, _, _, Host, _ = _get_models()
+    _, _, _, _, Host, _ = _get_models()
     return Host.objects.create(
         user_id=host_user.id,
         address="123 Test Street",
@@ -213,7 +191,7 @@ def host(host_user, db):
 @pytest.fixture
 def vacancy(host, db):
     """Create a vacancy."""
-    _, _, _, _, _, _, Vacancy = _get_models()
+    _, _, _, _, _, Vacancy = _get_models()
     return Vacancy.objects.create(
         host=host,
         name="House Helper Needed",
@@ -234,7 +212,7 @@ def vacancy(host, db):
 def authenticated_host_client(host_user, db):
     """Authenticate a host client."""
     # Create a fresh client to avoid cookie conflicts
-    _, Client, _, _, _, _, _ = _get_models()
+    _, Client, _, _, _, _ = _get_models()
     client = Client()
     
     response = client.post(

@@ -1,1 +1,0 @@
-# Helper resume tests package

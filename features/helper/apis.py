@@ -44,7 +44,7 @@ class HelperControllerAPI:
 
         return HelperModel.objects.filter(filters).select_related("user")
 
-    @route.get("/self/", response={200: HelperResponseSchema})
+    @route.get("/self/", response={200: HelperResponseSchema}, permissions=[IsAuthenticated])
     def get_self_profile(self, request: WSGIRequest) -> HelperModel:
         """Retrieve the authenticated user's helper profile."""
         user = request.user
