@@ -14,7 +14,7 @@ from features.application.schemas import (
     ApplicationStatusUpdateSchema,
 )
 from features.helper.models import HelperModel
-from features.host.models import HostModel, Vacancy
+from features.host.models import Host, Vacancy
 
 
 @api_controller(prefix_or_class="applications", tags=["applications"], permissions=[IsAuthenticated])
@@ -27,7 +27,7 @@ class ApplicationControllerAPI:
         user = request.user
 
         # Get the helper profile
-        helper = get_object_or_404(HelperModel, user=user)
+        helper = get_object_or_404(HelperModel, user_id=user.id)
 
         # Get the vacancy
         vacancy = get_object_or_404(Vacancy, id=data.vacancy_id)
@@ -56,7 +56,7 @@ class ApplicationControllerAPI:
         # Try to get helper profile (may not exist if user is only a host)
         helper = HelperModel.objects.filter(user=user).first()
         # Try to get host profiles (user may have multiple hosts)
-        hosts = HostModel.objects.filter(user=user)
+        hosts = Host.objects.filter(user=user)
 
         # Build query: applications where user is helper OR vacancy's host
         from django.db.models import Q

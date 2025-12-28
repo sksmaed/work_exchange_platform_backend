@@ -15,14 +15,19 @@ CORS_ALLOWED_ORIGINS = env.list(
 )
 
 if DEBUG:  # noqa: F405
-    INSTALLED_APPS += [  # noqa: F405
-        "debug_toolbar",
-        "query_inspector",
-    ]
-    MIDDLEWARE += [  # noqa: F405
-        "debug_toolbar.middleware.DebugToolbarMiddleware",
-        "query_inspector.middleware.QueryCountMiddleware",
-    ]
+    try:
+        import debug_toolbar  # noqa: F401
+        INSTALLED_APPS += ["debug_toolbar"]  # noqa: F405
+        MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]  # noqa: F405
+    except ImportError:
+        pass
+
+    try:
+        import query_inspector  # noqa: F401
+        INSTALLED_APPS += ["query_inspector"]  # noqa: F405
+        MIDDLEWARE += ["query_inspector.middleware.QueryCountMiddleware"]  # noqa: F405
+    except ImportError:
+        pass
     DEBUG_TOOLBAR_CONFIG = {
         "DISABLE_PANELS": [
             "debug_toolbar.panels.profiling.ProfilingPanel",
@@ -33,3 +38,12 @@ if DEBUG:  # noqa: F405
     INTERNAL_IPS = ["127.0.0.1", "10.0.2.2"]
 
 CACHES["default"]["LOCATION"] = env("CACHES_URL", default="valkey://127.0.0.1:6379/0")  # noqa: F405
+
+# Override cache for tests to use dummy backend
+import sys  # noqa: E402
+if "pytest" in sys.modules or "pytest" in sys.argv[0]:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        }
+    }
