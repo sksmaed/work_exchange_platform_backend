@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from features.forum.models import ForumCategory, ForumReply, ForumThread
+from features.forum.models import (
+    ForumCategory,
+    ForumReply,
+    ForumReplyImage,
+    ForumThread,
+    ForumThreadImage,
+)
 
 
 @admin.register(ForumCategory)
@@ -24,6 +30,15 @@ class ForumThreadAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
 
 
+@admin.register(ForumThreadImage)
+class ForumThreadImageAdmin(admin.ModelAdmin):
+    """Admin interface for ForumThreadImage model."""
+
+    list_display = ["thread", "created_at"]
+    list_filter = ["created_at"]
+    raw_id_fields = ["thread"]
+
+
 @admin.register(ForumReply)
 class ForumReplyAdmin(admin.ModelAdmin):
     """Admin interface for ForumReply model."""
@@ -39,3 +54,12 @@ class ForumReplyAdmin(admin.ModelAdmin):
         return obj.content[:50] + "..." if len(obj.content) > 50 else obj.content
 
     content_preview.short_description = "Content"
+
+
+@admin.register(ForumReplyImage)
+class ForumReplyImageAdmin(admin.ModelAdmin):
+    """Admin interface for ForumReplyImage model."""
+
+    list_display = ["reply", "created_at"]
+    list_filter = ["created_at"]
+    raw_id_fields = ["reply"]

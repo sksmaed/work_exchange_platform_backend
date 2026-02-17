@@ -2,18 +2,34 @@ from django.core.handlers.wsgi import WSGIRequest
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
+from ninja import File, UploadedFile
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 
-from common.exceptions import Http403ForbiddenException, KeyNotFoundException
+from common.exceptions import (
+    ErrorDetail,
+    Http400BadRequestException,
+    Http403ForbiddenException,
+    KeyNotFoundException,
+)
 from features.core.models import User
 from features.forum.exceptions import (
+    ForumInvalidImageError,
+    ForumReplyImageNotFoundError,
     ForumReplyNotFoundError,
+    ForumThreadImageNotFoundError,
     ForumThreadNotFoundError,
 )
-from features.forum.models import ForumCategory, ForumReply, ForumThread
+from features.forum.models import (
+    ForumCategory,
+    ForumReply,
+    ForumReplyImage,
+    ForumThread,
+    ForumThreadImage,
+)
 from features.forum.schemas import (
     ForumCategoryResponseSchema,
+    ForumImageUploadResponseSchema,
     ForumReplyCreateSchema,
     ForumReplyResponseSchema,
     ForumReplyUpdateSchema,
@@ -30,6 +46,8 @@ from features.forum.schemas import (
 class ForumControllerAPI:
     """API endpoints for forum categories, threads, and replies."""
 
+    ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
     def _user_to_basic_schema(self, user: User) -> dict:
         """Convert User model to UserBasicSchema dict."""
         return {
@@ -37,6 +55,40 @@ class ForumControllerAPI:
             "name": user.name or user.email,
             "email": user.email,
             "avatar": user.avatar.url if user.avatar else None,
+        }
+
+    def _thread_image_urls(self, thread: ForumThread) -> list[str]:
+        """Get image URLs for a thread."""
+        return [img.image.url for img in thread.images.all() if img.image]
+
+    def _reply_image_urls(self, reply: ForumReply) -> list[str]:
+        """Get image URLs for a reply."""
+        return [img.image.url for img in reply.images.all() if img.image]
+
+    def _thread_response(self, thread: ForumThread, replies: list[ForumReply] | None = None) -> dict:
+        """Build thread detail response dict."""
+        replies = replies or list(thread.replies.select_related("author").order_by("created_at"))
+        return {
+            "id": str(thread.id),
+            "title": thread.title,
+            "content": thread.content,
+            "author": self._user_to_basic_schema(thread.author),
+            "category_id": str(thread.category_id) if thread.category_id else None,
+            "category_name": thread.category.name if thread.category else None,
+            "reply_count": len(replies),
+            "image_urls": self._thread_image_urls(thread),
+            "replies": [
+                {
+                    "id": str(r.id),
+                    "thread_id": str(r.thread_id),
+                    "author": self._user_to_basic_schema(r.author),
+                    "content": r.content,
+                    "image_urls": self._reply_image_urls(r),
+                    "created_at": r.created_at,
+                }
+                for r in replies
+            ],
+            "created_at": thread.created_at,
         }
 
     @route.get("/categories", response={200: list[ForumCategoryResponseSchema]})
@@ -64,8 +116,10 @@ class ForumControllerAPI:
         search: str | None = None,
     ) -> dict:
         """List forum threads with pagination (public)."""
-        queryset = ForumThread.objects.select_related("author", "category").annotate(
-            reply_count=Count("replies")
+        queryset = (
+            ForumThread.objects.select_related("author", "category")
+            .prefetch_related("images")
+            .annotate(reply_count=Count("replies"))
         )
 
         if category_id:
@@ -88,6 +142,7 @@ class ForumControllerAPI:
                 "category_id": str(t.category_id) if t.category_id else None,
                 "category_name": t.category.name if t.category else None,
                 "reply_count": t.reply_count,
+                "image_urls": self._thread_image_urls(t),
                 "created_at": t.created_at,
             }
             for t in page_obj.object_list
@@ -107,34 +162,20 @@ class ForumControllerAPI:
         try:
             thread = (
                 ForumThread.objects.select_related("author", "category")
+                .prefetch_related("images")
                 .annotate(reply_count=Count("replies"))
                 .get(id=thread_id)
             )
         except ForumThread.DoesNotExist:
             raise KeyNotFoundException(ForumThreadNotFoundError, thread_id)
 
-        replies = ForumReply.objects.filter(thread=thread).select_related("author").order_by("created_at")
-
-        return {
-            "id": str(thread.id),
-            "title": thread.title,
-            "content": thread.content,
-            "author": self._user_to_basic_schema(thread.author),
-            "category_id": str(thread.category_id) if thread.category_id else None,
-            "category_name": thread.category.name if thread.category else None,
-            "reply_count": thread.reply_count,
-            "replies": [
-                {
-                    "id": str(r.id),
-                    "thread_id": str(r.thread_id),
-                    "author": self._user_to_basic_schema(r.author),
-                    "content": r.content,
-                    "created_at": r.created_at,
-                }
-                for r in replies
-            ],
-            "created_at": thread.created_at,
-        }
+        replies = (
+            ForumReply.objects.filter(thread=thread)
+            .select_related("author")
+            .prefetch_related("images")
+            .order_by("created_at")
+        )
+        return self._thread_response(thread, list(replies))
 
     @route.post("/threads", response={201: ForumThreadDetailResponseSchema}, permissions=[IsAuthenticated])
     def create_thread(self, request: WSGIRequest, data: ForumThreadCreateSchema) -> dict:
@@ -153,17 +194,7 @@ class ForumControllerAPI:
         )
         thread.save(user=user)
 
-        return {
-            "id": str(thread.id),
-            "title": thread.title,
-            "content": thread.content,
-            "author": self._user_to_basic_schema(thread.author),
-            "category_id": str(thread.category_id) if thread.category_id else None,
-            "category_name": thread.category.name if thread.category else None,
-            "reply_count": 0,
-            "replies": [],
-            "created_at": thread.created_at,
-        }
+        return self._thread_response(thread, [])
 
     @route.patch("/threads/{thread_id}", response={200: ForumThreadDetailResponseSchema}, permissions=[IsAuthenticated])
     def update_thread(
@@ -194,27 +225,13 @@ class ForumControllerAPI:
 
         thread.save(user=user, update_fields=update_fields if update_fields else None)
 
-        replies = ForumReply.objects.filter(thread=thread).select_related("author").order_by("created_at")
-        return {
-            "id": str(thread.id),
-            "title": thread.title,
-            "content": thread.content,
-            "author": self._user_to_basic_schema(thread.author),
-            "category_id": str(thread.category_id) if thread.category_id else None,
-            "category_name": thread.category.name if thread.category else None,
-            "reply_count": thread.replies.count(),
-            "replies": [
-                {
-                    "id": str(r.id),
-                    "thread_id": str(r.thread_id),
-                    "author": self._user_to_basic_schema(r.author),
-                    "content": r.content,
-                    "created_at": r.created_at,
-                }
-                for r in replies
-            ],
-            "created_at": thread.created_at,
-        }
+        replies = (
+            ForumReply.objects.filter(thread=thread)
+            .select_related("author")
+            .prefetch_related("images")
+            .order_by("created_at")
+        )
+        return self._thread_response(thread, list(replies))
 
     @route.delete("/threads/{thread_id}", response={200: dict}, permissions=[IsAuthenticated])
     def delete_thread(self, request: WSGIRequest, thread_id: str) -> dict:
@@ -253,6 +270,7 @@ class ForumControllerAPI:
             "thread_id": str(reply.thread_id),
             "author": self._user_to_basic_schema(reply.author),
             "content": reply.content,
+            "image_urls": self._reply_image_urls(reply),
             "created_at": reply.created_at,
         }
 
@@ -284,6 +302,7 @@ class ForumControllerAPI:
             "thread_id": str(reply.thread_id),
             "author": self._user_to_basic_schema(reply.author),
             "content": reply.content,
+            "image_urls": self._reply_image_urls(reply),
             "created_at": reply.created_at,
         }
 
@@ -302,3 +321,143 @@ class ForumControllerAPI:
 
         reply.delete()
         return {"detail": "Reply deleted successfully"}
+
+    def _validate_image(self, file: UploadedFile) -> None:
+        """Validate that the uploaded file is an allowed image type."""
+        content_type = getattr(file, "content_type", "") or ""
+        if content_type not in self.ALLOWED_IMAGE_TYPES:
+            raise Http400BadRequestException(
+                [ErrorDetail(ForumInvalidImageError, {"message": "Only JPEG, PNG, GIF, and WebP images are allowed"})]
+            )
+
+    @route.post(
+        "/threads/{thread_id}/images",
+        response={201: ForumImageUploadResponseSchema},
+        permissions=[IsAuthenticated],
+    )
+    def add_thread_images(
+        self,
+        request: WSGIRequest,
+        thread_id: str,
+        images: list[UploadedFile] | None = File(default=None),
+    ) -> dict:
+        """Add images to a thread (author only)."""
+        user = request.user
+
+        try:
+            thread = ForumThread.objects.get(id=thread_id)
+        except ForumThread.DoesNotExist:
+            raise KeyNotFoundException(ForumThreadNotFoundError, thread_id)
+
+        if thread.author != user:
+            raise Http403ForbiddenException("Only the author can add images to this thread")
+
+        images = images or []
+        if not images:
+            return {"image_urls": []}
+
+        urls = []
+        for file in images:
+            self._validate_image(file)
+            thread_image = ForumThreadImage(thread=thread)
+            thread_image.image.save(file.name, file, save=True)
+            urls.append(thread_image.image.url)
+
+        return {"image_urls": urls}
+
+    @route.delete(
+        "/threads/{thread_id}/images/{image_id}",
+        response={200: dict},
+        permissions=[IsAuthenticated],
+    )
+    def delete_thread_image(
+        self,
+        request: WSGIRequest,
+        thread_id: str,
+        image_id: str,
+    ) -> dict:
+        """Remove an image from a thread (author only)."""
+        user = request.user
+
+        try:
+            thread = ForumThread.objects.get(id=thread_id)
+        except ForumThread.DoesNotExist:
+            raise KeyNotFoundException(ForumThreadNotFoundError, thread_id)
+
+        if thread.author != user:
+            raise Http403ForbiddenException("Only the author can remove images from this thread")
+
+        try:
+            thread_image = ForumThreadImage.objects.get(id=image_id, thread=thread)
+        except ForumThreadImage.DoesNotExist:
+            raise KeyNotFoundException(ForumThreadImageNotFoundError, image_id)
+
+        thread_image.image.delete(save=False)
+        thread_image.delete()
+        return {"detail": "Image removed successfully"}
+
+    @route.post(
+        "/replies/{reply_id}/images",
+        response={201: ForumImageUploadResponseSchema},
+        permissions=[IsAuthenticated],
+    )
+    def add_reply_images(
+        self,
+        request: WSGIRequest,
+        reply_id: str,
+        images: list[UploadedFile] | None = File(default=None),
+    ) -> dict:
+        """Add images to a reply (author only)."""
+        user = request.user
+
+        try:
+            reply = ForumReply.objects.get(id=reply_id)
+        except ForumReply.DoesNotExist:
+            raise KeyNotFoundException(ForumReplyNotFoundError, reply_id)
+
+        if reply.author != user:
+            raise Http403ForbiddenException("Only the author can add images to this reply")
+
+        images = images or []
+        if not images:
+            return {"image_urls": []}
+
+        urls = []
+        for file in images:
+            self._validate_image(file)
+            reply_image = ForumReplyImage(reply=reply)
+            reply_image.image.save(file.name, file, save=True)
+            urls.append(reply_image.image.url)
+
+        return {"image_urls": urls}
+
+    @route.delete(
+        "/replies/{reply_id}/images/{image_id}",
+        response={200: dict},
+        permissions=[IsAuthenticated],
+    )
+    def delete_reply_image(
+        self,
+        request: WSGIRequest,
+        reply_id: str,
+        image_id: str,
+    ) -> dict:
+        """Remove an image from a reply (author only)."""
+        user = request.user
+
+        try:
+            reply = ForumReply.objects.get(id=reply_id)
+        except ForumReply.DoesNotExist:
+            raise KeyNotFoundException(ForumReplyNotFoundError, reply_id)
+
+        if reply.author != user:
+            raise Http403ForbiddenException("Only the author can remove images from this reply")
+
+        try:
+            reply_image = ForumReplyImage.objects.get(id=image_id, reply=reply)
+        except ForumReplyImage.DoesNotExist:
+            raise KeyNotFoundException(ForumReplyImageNotFoundError, image_id)
+
+        reply_image.image.delete(save=False)
+        reply_image.delete()
+        return {"detail": "Image removed successfully"}

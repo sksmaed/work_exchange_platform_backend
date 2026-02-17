@@ -4,9 +4,9 @@ import json
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
-
-from features.forum.models import ForumCategory, ForumReply, ForumThread
+from features.forum.models import ForumCategory, ForumReply, ForumReplyImage, ForumThread, ForumThreadImage
 
 User = get_user_model()
 
@@ -343,3 +343,140 @@ class TestForumAPIIntegration:
         # Delete thread
         del_resp = auth_client.delete(f"/api/forum/threads/{thread_id}")
         assert del_resp.status_code == 200
+
+
+def _make_image_file(name: str = "test.png", content_type: str = "image/png") -> SimpleUploadedFile:
+    """Create a minimal valid PNG file for testing."""
+    # Minimal 1x1 PNG
+    png_data = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00"
+        b"\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    return SimpleUploadedFile(name, png_data, content_type=content_type)
+
+
+@pytest.mark.django_db
+class TestForumImageUpload:
+    """Test cases for forum image uploads."""
+
+    def test_list_threads_includes_image_urls(
+        self, client: Client, forum_thread: ForumThread, user: User
+    ) -> None:
+        """Test that thread list includes image_urls (empty when no images)."""
+        response = client.get("/api/forum/threads")
+        assert response.status_code == 200
+        data = response.json()
+        assert "image_urls" in data["items"][0]
+        assert data["items"][0]["image_urls"] == []
+
+    def test_get_thread_includes_image_urls(
+        self, client: Client, forum_thread: ForumThread, forum_reply: ForumReply
+    ) -> None:
+        """Test that thread detail includes image_urls for thread and replies."""
+        response = client.get(f"/api/forum/threads/{forum_thread.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "image_urls" in data
+        assert data["image_urls"] == []
+        assert "image_urls" in data["replies"][0]
+        assert data["replies"][0]["image_urls"] == []
+
+    def test_add_thread_images_success(
+        self, auth_client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test adding images to a thread."""
+        image = _make_image_file()
+        response = auth_client.post(
+            f"/api/forum/threads/{forum_thread.id}/images",
+            data={"images": image},
+            format="multipart",
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert "image_urls" in data
+        assert len(data["image_urls"]) == 1
+        assert "/api/media/" in data["image_urls"][0]
+        assert ForumThreadImage.objects.filter(thread=forum_thread).count() == 1
+
+    def test_add_thread_images_not_author(
+        self, client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test that non-author cannot add images to thread."""
+        other_user = User.objects.create_user(
+            email="other@example.com",
+            password="testpassword123",
+            username="otheruser",
+            user_type=User.UserTypeChoices.HELPER,
+        )
+        client.force_login(other_user)
+        image = _make_image_file()
+        response = client.post(
+            f"/api/forum/threads/{forum_thread.id}/images",
+            data={"images": image},
+            format="multipart",
+        )
+        assert response.status_code == 403
+
+    def test_add_reply_images_success(
+        self, auth_client: Client, forum_reply: ForumReply
+    ) -> None:
+        """Test adding images to a reply."""
+        image = _make_image_file()
+        response = auth_client.post(
+            f"/api/forum/replies/{forum_reply.id}/images",
+            data={"images": image},
+            format="multipart",
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert len(data["image_urls"]) == 1
+        assert ForumReplyImage.objects.filter(reply=forum_reply).count() == 1
+
+    def test_delete_thread_image_author(
+        self, auth_client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test author can delete thread image."""
+        image = _make_image_file()
+        auth_client.post(
+            f"/api/forum/threads/{forum_thread.id}/images",
+            data={"images": image},
+            format="multipart",
+        )
+        thread_image = ForumThreadImage.objects.get(thread=forum_thread)
+        response = auth_client.delete(
+            f"/api/forum/threads/{forum_thread.id}/images/{thread_image.id}"
+        )
+        assert response.status_code == 200
+        assert not ForumThreadImage.objects.filter(thread=forum_thread).exists()
+
+    def test_delete_reply_image_author(
+        self, auth_client: Client, forum_reply: ForumReply
+    ) -> None:
+        """Test author can delete reply image."""
+        image = _make_image_file()
+        auth_client.post(
+            f"/api/forum/replies/{forum_reply.id}/images",
+            data={"images": image},
+            format="multipart",
+        )
+        reply_image = ForumReplyImage.objects.get(reply=forum_reply)
+        response = auth_client.delete(
+            f"/api/forum/replies/{forum_reply.id}/images/{reply_image.id}"
+        )
+        assert response.status_code == 200
+        assert not ForumReplyImage.objects.filter(reply=forum_reply).exists()
+
+    def test_thread_with_images_in_get_response(
+        self, auth_client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test that get_thread returns image URLs after upload."""
+        image = _make_image_file()
+        auth_client.post(
+            f"/api/forum/threads/{forum_thread.id}/images",
+            data={"images": image},
+            format="multipart",
+        )
+        response = auth_client.get(f"/api/forum/threads/{forum_thread.id}")
+        assert response.status_code == 200
+        assert len(response.json()["image_urls"]) == 1

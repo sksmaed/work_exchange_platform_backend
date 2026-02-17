@@ -3,6 +3,7 @@ from typing import ClassVar
 from django.db import models
 
 from common.models import BaseModel
+from utils.storage import get_model_file_path
 
 
 class ForumCategory(BaseModel):
@@ -74,6 +75,23 @@ class ForumThread(BaseModel):
         return self.title
 
 
+class ForumThreadImage(BaseModel):
+    """Image attachment for a forum thread."""
+
+    thread = models.ForeignKey(
+        ForumThread,
+        on_delete=models.CASCADE,
+        related_name="images",
+    )
+    image = models.ImageField(upload_to=get_model_file_path)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"Image for thread {self.thread_id}"
+
+
 class ForumReply(BaseModel):
     """Model representing a reply to a forum thread.
 
@@ -110,3 +128,21 @@ class ForumReply(BaseModel):
     def __str__(self) -> str:
         """String representation of the ForumReply."""
         return f"Reply by {self.author} on {self.thread.title}"
+
+
+class ForumReplyImage(BaseModel):
+    """Image attachment for a forum reply."""
+
+    reply = models.ForeignKey(
+        ForumReply,
+        on_delete=models.CASCADE,
+        related_name="images",
+    )
+    image = models.ImageField(upload_to=get_model_file_path)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["created_at"]
+        verbose_name_plural = "Forum reply images"
+
+    def __str__(self) -> str:
+        return f"Image for reply {self.reply_id}"

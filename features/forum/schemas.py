@@ -56,6 +56,7 @@ class ForumThreadListResponseSchema(Schema):
     category_id: str | None
     category_name: str | None
     reply_count: int
+    image_urls: list[str] = []
     created_at: datetime
 
 
@@ -66,6 +67,7 @@ class ForumReplyResponseSchema(Schema):
     thread_id: str
     author: UserBasicSchema
     content: str
+    image_urls: list[str] = []
     created_at: datetime
 
 
@@ -91,8 +93,15 @@ class ForumThreadDetailResponseSchema(Schema):
     category_id: str | None
     category_name: str | None
     reply_count: int
+    image_urls: list[str] = []
     replies: list[ForumReplyResponseSchema]
     created_at: datetime
+
+
+class ForumImageUploadResponseSchema(Schema):
+    """Schema for image upload response."""
+
+    image_urls: list[str]
 
 
 class ForumThreadListPaginatedSchema(Schema):
