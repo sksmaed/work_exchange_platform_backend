@@ -163,7 +163,6 @@ class ForumControllerAPI:
             thread = (
                 ForumThread.objects.select_related("author", "category")
                 .prefetch_related("images")
-                .annotate(reply_count=Count("replies"))
                 .get(id=thread_id)
             )
         except ForumThread.DoesNotExist:
