@@ -79,8 +79,12 @@ LOCAL_APPS = [
     "features.core",
     "features.helper",
     "features.host",
+<<<<<<< HEAD
     "features.application",
     "features.chat",
+=======
+    "features.forum",
+>>>>>>> origin/main
     "features.helper.resume",
 ]
 INSTALLED_APPS = APPS + LOCAL_APPS
