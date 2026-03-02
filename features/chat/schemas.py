@@ -1,12 +1,13 @@
 from datetime import datetime
+from uuid import UUID
 
-from ninja import ModelSchema, Schema
+from ninja import Field, Schema
 
 
 class ConversationCreateSchema(Schema):
     """Schema for creating or getting a conversation."""
 
-    participant_id: str
+    participant_id: UUID
 
 
 class UserBasicSchema(Schema):
@@ -32,7 +33,7 @@ class ConversationResponseSchema(Schema):
 class MessageCreateSchema(Schema):
     """Schema for creating a new message."""
 
-    content: str
+    content: str = Field(..., min_length=1, max_length=5000)
 
 
 class MessageResponseSchema(Schema):

@@ -1,13 +1,15 @@
+import logging
+
 from django.core.handlers.wsgi import WSGIRequest
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 
 from common.exceptions import Http403ForbiddenException, KeyNotFoundException
-from features.chat.exceptions import ConversationNotFoundError, InvalidParticipantError, MessageNotFoundError
+from features.chat.exceptions import ConversationNotFoundError
 from features.chat.models import Conversation, Message
 from features.chat.schemas import (
     ConversationCreateSchema,
@@ -20,10 +22,14 @@ from features.chat.schemas import (
 )
 from features.core.models import User
 
+logger = logging.getLogger(__name__)
+
 
 @api_controller(prefix_or_class="chat", tags=["chat"], permissions=[IsAuthenticated])
 class ChatControllerAPI:
     """API endpoints for managing chat conversations and messages."""
+
+    MAX_PAGE_SIZE = 100
 
     def _user_to_basic_schema(self, user: User) -> dict:
         """Convert User model to UserBasicSchema dict."""
@@ -36,10 +42,11 @@ class ChatControllerAPI:
 
     def _conversation_to_response(self, conversation: Conversation, current_user: User) -> dict:
         """Convert Conversation model to ConversationResponseSchema dict."""
-        # Count unread messages for current user
-        unread_count = Message.objects.filter(
-            conversation=conversation, read_at__isnull=True
-        ).exclude(sender=current_user).count()
+        unread_count = getattr(conversation, "unread_count", None)
+        if unread_count is None:
+            unread_count = Message.objects.filter(
+                conversation=conversation, read_at__isnull=True
+            ).exclude(sender=current_user).count()
 
         return {
             "id": str(conversation.id),
@@ -68,14 +75,11 @@ class ChatControllerAPI:
         """Create or get a conversation with another user."""
         user = request.user
 
-        # Get the other participant
         other_user = get_object_or_404(User, id=data.participant_id)
 
-        # Cannot create conversation with yourself
         if user.id == other_user.id:
             raise Http403ForbiddenException("Cannot create a conversation with yourself")
 
-        # Get or create conversation
         conversation, created = Conversation.get_or_create_conversation(user, other_user)
 
         return self._conversation_to_response(conversation, user)
@@ -85,9 +89,16 @@ class ChatControllerAPI:
         """List all conversations for the current user."""
         user = request.user
 
-        conversations = Conversation.objects.filter(
-            Q(participant_1=user) | Q(participant_2=user)
-        ).select_related("participant_1", "participant_2")
+        conversations = (
+            Conversation.objects.filter(Q(participant_1=user) | Q(participant_2=user))
+            .select_related("participant_1", "participant_2")
+            .annotate(
+                unread_count=Count(
+                    "messages",
+                    filter=Q(messages__read_at__isnull=True) & ~Q(messages__sender=user),
+                )
+            )
+        )
 
         return [self._conversation_to_response(conv, user) for conv in conversations]
 
@@ -101,8 +112,9 @@ class ChatControllerAPI:
     ) -> dict:
         """Get messages in a conversation with pagination."""
         user = request.user
+        page = max(1, page)
+        page_size = min(max(1, page_size), self.MAX_PAGE_SIZE)
 
-        # Get conversation
         try:
             conversation = Conversation.objects.select_related(
                 "participant_1", "participant_2"
@@ -110,19 +122,19 @@ class ChatControllerAPI:
         except Conversation.DoesNotExist:
             raise KeyNotFoundException(ConversationNotFoundError, conversation_id)
 
-        # Check if user is a participant
         if user not in [conversation.participant_1, conversation.participant_2]:
             raise Http403ForbiddenException("You are not a participant in this conversation")
 
-        # Get messages
-        messages = Message.objects.filter(conversation=conversation).select_related("sender").order_by("-created_at")
+        messages = (
+            Message.objects.filter(conversation=conversation)
+            .select_related("sender")
+            .order_by("created_at")
+        )
 
-        # Paginate
         paginator = Paginator(messages, page_size)
         page_obj = paginator.get_page(page)
 
-        # Convert to response schema (reverse to show oldest first on page)
-        message_list = [self._message_to_response(msg) for msg in reversed(page_obj.object_list)]
+        message_list = [self._message_to_response(msg) for msg in page_obj.object_list]
 
         return {
             "messages": message_list,
@@ -142,7 +154,6 @@ class ChatControllerAPI:
         """Send a message in a conversation."""
         user = request.user
 
-        # Get conversation
         try:
             conversation = Conversation.objects.select_related(
                 "participant_1", "participant_2"
@@ -150,22 +161,18 @@ class ChatControllerAPI:
         except Conversation.DoesNotExist:
             raise KeyNotFoundException(ConversationNotFoundError, conversation_id)
 
-        # Check if user is a participant
         if user not in [conversation.participant_1, conversation.participant_2]:
             raise Http403ForbiddenException("You are not a participant in this conversation")
 
-        # Create message
         message = Message.objects.create(
             conversation=conversation,
             sender=user,
             content=data.content,
         )
 
-        # Update conversation's last_message_at
         conversation.last_message_at = message.created_at
         conversation.save(update_fields=["last_message_at"])
 
-        # Send real-time notification via Channels (if connected)
         self._send_realtime_message(conversation, message, user)
 
         return self._message_to_response(message)
@@ -180,27 +187,22 @@ class ChatControllerAPI:
         """Mark messages as read in a conversation."""
         user = request.user
 
-        # Get conversation
         try:
             conversation = Conversation.objects.get(id=conversation_id)
         except Conversation.DoesNotExist:
             raise KeyNotFoundException(ConversationNotFoundError, conversation_id)
 
-        # Check if user is a participant
         if user not in [conversation.participant_1, conversation.participant_2]:
             raise Http403ForbiddenException("You are not a participant in this conversation")
 
-        # Get unread messages sent by the other user
         unread_messages = Message.objects.filter(
             conversation=conversation,
             read_at__isnull=True,
         ).exclude(sender=user)
 
-        # If specific message IDs provided, filter by them
         if data.message_ids:
             unread_messages = unread_messages.filter(id__in=data.message_ids)
 
-        # Mark as read
         count = unread_messages.update(read_at=timezone.now())
 
         return {
@@ -210,25 +212,22 @@ class ChatControllerAPI:
 
     @route.delete("/conversations/{conversation_id}", response={200: dict})
     def delete_conversation(self, request: WSGIRequest, conversation_id: str) -> dict:
-        """Delete a conversation (soft delete - marks messages as deleted)."""
+        """Delete a conversation."""
         user = request.user
 
-        # Get conversation
         try:
             conversation = Conversation.objects.get(id=conversation_id)
         except Conversation.DoesNotExist:
             raise KeyNotFoundException(ConversationNotFoundError, conversation_id)
 
-        # Check if user is a participant
         if user not in [conversation.participant_1, conversation.participant_2]:
             raise Http403ForbiddenException("You are not a participant in this conversation")
 
-        # Delete the conversation
         conversation.delete()
 
         return {"detail": "Conversation deleted successfully"}
 
-    def _send_realtime_message(self, conversation: Conversation, message: Message, sender: User):
+    def _send_realtime_message(self, conversation: Conversation, message: Message, sender: User) -> None:
         """Send real-time message notification via Django Channels."""
         try:
             from asgiref.sync import async_to_sync
@@ -236,7 +235,6 @@ class ChatControllerAPI:
 
             channel_layer = get_channel_layer()
             if channel_layer:
-                # Send to conversation group
                 async_to_sync(channel_layer.group_send)(
                     f"chat_{conversation.id}",
                     {
@@ -245,5 +243,4 @@ class ChatControllerAPI:
                     },
                 )
         except Exception:
-            # Fail silently if channels not configured
-            pass
+            logger.exception("Failed to send real-time message for conversation %s", conversation.id)

@@ -154,7 +154,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [env("CACHES_LOCATION", default="redis://localhost:6379/0")],
+            "hosts": [env("CHANNEL_LAYERS_REDIS_LOCATION", default="redis://localhost:6379/1")],
         },
     },
 }

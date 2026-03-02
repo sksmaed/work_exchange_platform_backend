@@ -5,6 +5,7 @@ import json
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
+from django.utils import timezone
 
 from features.chat.models import Conversation, Message
 
@@ -12,8 +13,9 @@ User = get_user_model()
 
 
 @pytest.fixture
-def auth_client(client: Client, user: User) -> Client:
+def auth_client(user: User) -> Client:
     """Authenticated client for chat tests using force_login (bypasses email verification)."""
+    client = Client()
     client.force_login(user)
     return client
 
@@ -51,6 +53,18 @@ def message(conversation: Conversation, second_user: User) -> Message:
     )
 
 
+@pytest.fixture
+@pytest.mark.django_db
+def third_user(db: None) -> User:
+    """Create a third user who is not a participant in shared conversations."""
+    return User.objects.create_user(
+        email="third@example.com",
+        password="testpassword123",  # noqa: S106
+        username="thirduser",
+        user_type=User.UserTypeChoices.HELPER,
+    )
+
+
 @pytest.mark.django_db
 class TestChatAPI:
     """Test cases for Chat API."""
@@ -74,8 +88,9 @@ class TestChatAPI:
         data = response.json()
 
         assert "id" in data
-        assert data["participant_1"]["id"] == str(user.id)
-        assert data["participant_2"]["id"] == str(second_user.id)
+        participant_ids = {data["participant_1"]["id"], data["participant_2"]["id"]}
+        assert str(user.id) in participant_ids
+        assert str(second_user.id) in participant_ids
         assert data["unread_count"] == 0
         assert "created_at" in data
 
@@ -115,8 +130,9 @@ class TestChatAPI:
 
         assert response.status_code == 403
 
-    def test_create_conversation_not_authenticated(self, client: Client, second_user: User) -> None:
-        """Test creating conversation without authentication fails."""
+    def test_create_conversation_unauthenticated_returns_403(self, second_user: User) -> None:
+        """Test creating conversation without authentication returns 403."""
+        client = Client()
         payload = {"participant_id": str(second_user.id)}
 
         response = client.post(
@@ -157,8 +173,9 @@ class TestChatAPI:
         assert isinstance(data, list)
         assert len(data) == 1
         assert data[0]["id"] == str(conversation.id)
-        assert data[0]["participant_1"]["id"] == str(user.id)
-        assert data[0]["participant_2"]["id"] == str(second_user.id)
+        participant_ids = {data[0]["participant_1"]["id"], data[0]["participant_2"]["id"]}
+        assert str(user.id) in participant_ids
+        assert str(second_user.id) in participant_ids
 
     def test_list_conversations_empty(self, auth_client: Client) -> None:
         """Test listing conversations when user has none."""
@@ -167,8 +184,9 @@ class TestChatAPI:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_list_conversations_not_authenticated(self, client: Client) -> None:
+    def test_list_conversations_not_authenticated(self) -> None:
         """Test listing conversations without authentication fails."""
+        client = Client()
         response = client.get("/api/chat/conversations")
         assert response.status_code == 403
 
@@ -219,26 +237,38 @@ class TestChatAPI:
         assert len(data["messages"]) == 2
         assert data["has_next"] is True
 
+    def test_get_messages_page_size_capped(
+        self,
+        auth_client: Client,
+        conversation: Conversation,
+    ) -> None:
+        """Test that page_size is capped at 100."""
+        response = auth_client.get(
+            f"/api/chat/conversations/{conversation.id}/messages?page_size=99999"
+        )
+        assert response.status_code == 200
+        assert response.json()["page_size"] == 100
+
+    def test_get_messages_negative_page_becomes_first(
+        self,
+        auth_client: Client,
+        conversation: Conversation,
+    ) -> None:
+        """Test that negative page number is treated as page 1."""
+        response = auth_client.get(
+            f"/api/chat/conversations/{conversation.id}/messages?page=-5"
+        )
+        assert response.status_code == 200
+        assert response.json()["page"] == 1
+
     def test_get_messages_not_participant_forbidden(
         self,
         client: Client,
         conversation: Conversation,
-        user: User,
-        second_user: User,
+        third_user: User,
     ) -> None:
         """Test getting messages when not a participant returns 403."""
-        # Create third user who is NOT in the conversation
-        third_user = User.objects.create_user(
-            email="third@example.com",
-            password="testpassword123",
-            username="thirduser",
-            user_type=User.UserTypeChoices.HELPER,
-        )
-
-        # Use force_login to bypass email verification
         client.force_login(third_user)
-
-        # Third user tries to access conversation between user and second_user - should fail
         resp = client.get(f"/api/chat/conversations/{conversation.id}/messages")
         assert resp.status_code == 403
 
@@ -275,8 +305,39 @@ class TestChatAPI:
         assert data["conversation_id"] == str(conversation.id)
         assert data["read_at"] is None
 
-        # Verify message was saved
         assert Message.objects.filter(conversation=conversation).count() == 1
+
+    def test_send_message_empty_content_fails(
+        self,
+        auth_client: Client,
+        conversation: Conversation,
+    ) -> None:
+        """Test that sending an empty message is rejected."""
+        payload = {"content": ""}
+
+        response = auth_client.post(
+            f"/api/chat/conversations/{conversation.id}/messages",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 422
+
+    def test_send_message_too_long_fails(
+        self,
+        auth_client: Client,
+        conversation: Conversation,
+    ) -> None:
+        """Test that sending a message exceeding max length is rejected."""
+        payload = {"content": "x" * 5001}
+
+        response = auth_client.post(
+            f"/api/chat/conversations/{conversation.id}/messages",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 422
 
     def test_send_message_updates_last_message_at(
         self,
@@ -285,8 +346,6 @@ class TestChatAPI:
         user: User,
     ) -> None:
         """Test that sending message updates conversation's last_message_at."""
-        from django.utils import timezone
-
         assert conversation.last_message_at is None
 
         payload = {"content": "Test message"}
@@ -302,10 +361,10 @@ class TestChatAPI:
 
     def test_send_message_not_authenticated(
         self,
-        client: Client,
         conversation: Conversation,
     ) -> None:
         """Test sending message without authentication fails."""
+        client = Client()
         payload = {"content": "Hello"}
 
         response = client.post(
@@ -324,7 +383,6 @@ class TestChatAPI:
         user: User,
     ) -> None:
         """Test marking messages as read."""
-        # Message is from second_user, so user (authenticated) can mark it read
         response = auth_client.patch(
             f"/api/chat/conversations/{conversation.id}/read",
             data=json.dumps({}),
@@ -340,10 +398,10 @@ class TestChatAPI:
 
     def test_mark_messages_as_read_not_authenticated(
         self,
-        client: Client,
         conversation: Conversation,
     ) -> None:
         """Test marking as read without authentication fails."""
+        client = Client()
         response = client.patch(
             f"/api/chat/conversations/{conversation.id}/read",
             data=json.dumps({}),
@@ -369,20 +427,10 @@ class TestChatAPI:
         self,
         client: Client,
         conversation: Conversation,
+        third_user: User,
     ) -> None:
         """Test deleting conversation when not a participant returns 403."""
-        # Create third user who is NOT in the conversation
-        third_user = User.objects.create_user(
-            email="third@example.com",
-            password="testpassword123",
-            username="thirduser",
-            user_type=User.UserTypeChoices.HELPER,
-        )
-
-        # Use force_login to bypass email verification
         client.force_login(third_user)
-
-        # Third user tries to delete - should fail with 403
         resp = client.delete(f"/api/chat/conversations/{conversation.id}")
         assert resp.status_code == 403
 
@@ -398,7 +446,6 @@ class TestChatAPIIntegration:
         second_user: User,
     ) -> None:
         """Test complete chat workflow: create conversation, send messages, list, mark read."""
-        # Step 1: Create conversation
         create_resp = auth_client.post(
             "/api/chat/conversations",
             data=json.dumps({"participant_id": str(second_user.id)}),
@@ -407,7 +454,6 @@ class TestChatAPIIntegration:
         assert create_resp.status_code == 201
         conversation_id = create_resp.json()["id"]
 
-        # Step 2: Send a message
         send_resp = auth_client.post(
             f"/api/chat/conversations/{conversation_id}/messages",
             data=json.dumps({"content": "Hi there!"}),
@@ -416,7 +462,6 @@ class TestChatAPIIntegration:
         assert send_resp.status_code == 201
         assert send_resp.json()["content"] == "Hi there!"
 
-        # Step 3: Get messages
         messages_resp = auth_client.get(
             f"/api/chat/conversations/{conversation_id}/messages"
         )
@@ -425,7 +470,6 @@ class TestChatAPIIntegration:
         assert messages_data["total"] == 1
         assert messages_data["messages"][0]["content"] == "Hi there!"
 
-        # Step 4: List conversations
         list_resp = auth_client.get("/api/chat/conversations")
         assert list_resp.status_code == 200
         convos = list_resp.json()

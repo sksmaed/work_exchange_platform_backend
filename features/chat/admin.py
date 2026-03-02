@@ -24,7 +24,7 @@ class MessageAdmin(admin.ModelAdmin):
     readonly_fields = ["id", "created_at", "updated_at"]
     date_hierarchy = "created_at"
 
-    def content_preview(self, obj):
+    def content_preview(self, obj: Message) -> str:
         """Return a preview of the message content."""
         return obj.content[:50] + "..." if len(obj.content) > 50 else obj.content
 

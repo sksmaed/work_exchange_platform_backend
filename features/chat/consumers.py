@@ -1,55 +1,52 @@
 import json
-import traceback
+import logging
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from features.chat.models import Conversation
 
+logger = logging.getLogger(__name__)
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     """WebSocket consumer for handling real-time chat messages."""
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Handle WebSocket connection."""
         try:
             user = self.scope["user"]
             self.conversation_id = self.scope["url_route"]["kwargs"]["conversation_id"]
 
-            # Check if user is authenticated
             if not user.is_authenticated:
                 await self.close()
                 return
 
-            # Verify user is a participant in this conversation
             is_participant = await self._check_participant(user, self.conversation_id)
             if not is_participant:
                 await self.close()
                 return
 
-            # Join conversation group
             self.room_group_name = f"chat_{self.conversation_id}"
             await self.channel_layer.group_add(self.room_group_name, self.channel_name)
 
             await self.accept()
         except Exception:
-            traceback.print_exc()
+            logger.exception("Error during WebSocket connect for conversation %s", getattr(self, "conversation_id", "unknown"))
             await self.close()
 
-    async def disconnect(self, code: int):
+    async def disconnect(self, _close_code: int) -> None:
         """Handle WebSocket disconnection."""
-        # Leave conversation group
         if hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-    async def receive(self, text_data: str):
+    async def receive(self, text_data: str) -> None:
         """Handle incoming WebSocket messages."""
         try:
             data = json.loads(text_data)
             message_type = data.get("type")
 
             if message_type == "typing":
-                # Broadcast typing indicator
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -59,7 +56,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     },
                 )
             elif message_type == "read_receipt":
-                # Broadcast read receipt
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -69,19 +65,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     },
                 )
         except Exception:
-            traceback.print_exc()
+            logger.exception("Error handling WebSocket message in conversation %s", getattr(self, "conversation_id", "unknown"))
 
-    async def chat_message(self, event: dict):
+    async def chat_message(self, event: dict) -> None:
         """Handle chat message event from group send."""
-        # Send message to WebSocket
         await self.send(text_data=json.dumps({
             "type": "message",
             "message": event["message"],
         }))
 
-    async def typing_indicator(self, event: dict):
+    async def typing_indicator(self, event: dict) -> None:
         """Handle typing indicator event."""
-        # Don't send typing indicator back to the sender
         if str(self.scope["user"].id) != event["user_id"]:
             await self.send(text_data=json.dumps({
                 "type": "typing",
@@ -89,9 +83,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "is_typing": event["is_typing"],
             }))
 
-    async def read_receipt(self, event: dict):
+    async def read_receipt(self, event: dict) -> None:
         """Handle read receipt event."""
-        # Don't send read receipt back to the sender
         if str(self.scope["user"].id) != event["user_id"]:
             await self.send(text_data=json.dumps({
                 "type": "read_receipt",

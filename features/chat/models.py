@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models import Q
 
 from common.models import BaseModel
+from features.core.models import User
 
 
 class Conversation(BaseModel):
@@ -12,9 +13,9 @@ class Conversation(BaseModel):
     Attributes:
     ----------
     participant_1 : ForeignKey
-        First participant in the conversation.
+        First participant in the conversation (always the user with the lower UUID).
     participant_2 : ForeignKey
-        Second participant in the conversation.
+        Second participant in the conversation (always the user with the higher UUID).
     last_message_at : DateTimeField
         Timestamp of the last message in the conversation.
     """
@@ -37,18 +38,27 @@ class Conversation(BaseModel):
             models.Index(fields=["participant_1", "participant_2"]),
             models.Index(fields=["-last_message_at"]),
         ]
+        constraints: ClassVar = [
+            models.UniqueConstraint(
+                fields=["participant_1", "participant_2"],
+                name="unique_conversation_participants",
+            ),
+        ]
 
     def __str__(self) -> str:
         """String representation of the Conversation."""
         return f"Conversation({self.participant_1.email} <-> {self.participant_2.email})"
 
-    def get_other_participant(self, user):
+    def get_other_participant(self, user: User) -> User:
         """Get the other participant in the conversation."""
         return self.participant_2 if self.participant_1 == user else self.participant_1
 
     @classmethod
-    def get_or_create_conversation(cls, user1, user2):
+    def get_or_create_conversation(cls, user1: User, user2: User) -> tuple["Conversation", bool]:
         """Get or create a conversation between two users.
+
+        Participants are ordered by UUID to ensure consistent storage and prevent
+        duplicate conversations regardless of argument order.
 
         Args:
             user1: First user
@@ -57,19 +67,14 @@ class Conversation(BaseModel):
         Returns:
             Tuple of (conversation, created)
         """
-        # Ensure consistent ordering to prevent duplicates
         if user1.id > user2.id:
             user1, user2 = user2, user1
 
-        conversation = cls.objects.filter(
-            Q(participant_1=user1, participant_2=user2) | Q(participant_1=user2, participant_2=user1)
-        ).first()
-
-        if conversation:
-            return conversation, False
-
-        conversation = cls.objects.create(participant_1=user1, participant_2=user2)
-        return conversation, True
+        conversation, created = cls.objects.get_or_create(
+            participant_1=user1,
+            participant_2=user2,
+        )
+        return conversation, created
 
 
 class Message(BaseModel):
@@ -111,7 +116,7 @@ class Message(BaseModel):
         """String representation of the Message."""
         return f"Message({self.sender.email} in {self.conversation.id})"
 
-    def mark_as_read(self):
+    def mark_as_read(self) -> None:
         """Mark the message as read."""
         if not self.read_at:
             from django.utils import timezone
