@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from ninja import Schema
+from ninja import Field, Schema
 
 
 class UserBasicSchema(Schema):
@@ -33,7 +33,7 @@ class ForumCategoryCreateSchema(Schema):
 class ForumThreadCreateSchema(Schema):
     """Schema for creating a forum thread."""
 
-    title: str
+    title: str = Field(..., max_length=255)
     content: str
     category_id: str | None = None
 
@@ -41,7 +41,7 @@ class ForumThreadCreateSchema(Schema):
 class ForumThreadUpdateSchema(Schema):
     """Schema for updating a forum thread."""
 
-    title: str | None = None
+    title: str | None = Field(None, max_length=255)
     content: str | None = None
     category_id: str | None = None
 

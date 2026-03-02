@@ -47,6 +47,7 @@ class ForumControllerAPI:
     """API endpoints for forum categories, threads, and replies."""
 
     ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    MAX_PAGE_SIZE = 100
 
     def _user_to_basic_schema(self, user: User) -> dict:
         """Convert User model to UserBasicSchema dict."""
@@ -67,7 +68,11 @@ class ForumControllerAPI:
 
     def _thread_response(self, thread: ForumThread, replies: list[ForumReply] | None = None) -> dict:
         """Build thread detail response dict."""
-        replies = replies or list(thread.replies.select_related("author").order_by("created_at"))
+        replies = replies or list(
+            thread.replies.select_related("author")
+            .prefetch_related("images")
+            .order_by("created_at")
+        )
         return {
             "id": str(thread.id),
             "title": thread.title,
@@ -116,6 +121,7 @@ class ForumControllerAPI:
         search: str | None = None,
     ) -> dict:
         """List forum threads with pagination (public)."""
+        page_size = min(page_size, self.MAX_PAGE_SIZE)
         queryset = (
             ForumThread.objects.select_related("author", "category")
             .prefetch_related("images")
@@ -203,7 +209,11 @@ class ForumControllerAPI:
         user = request.user
 
         try:
-            thread = ForumThread.objects.select_related("author", "category").get(id=thread_id)
+            thread = (
+                ForumThread.objects.select_related("author", "category")
+                .prefetch_related("images")
+                .get(id=thread_id)
+            )
         except ForumThread.DoesNotExist:
             raise KeyNotFoundException(ForumThreadNotFoundError, thread_id)
 
@@ -359,7 +369,8 @@ class ForumControllerAPI:
         for file in images:
             self._validate_image(file)
             thread_image = ForumThreadImage(thread=thread)
-            thread_image.image.save(file.name, file, save=True)
+            thread_image.image.save(file.name, file, save=False)
+            thread_image.save(user=user)
             urls.append(thread_image.image.url)
 
         return {"image_urls": urls}
@@ -425,7 +436,8 @@ class ForumControllerAPI:
         for file in images:
             self._validate_image(file)
             reply_image = ForumReplyImage(reply=reply)
-            reply_image.image.save(file.name, file, save=True)
+            reply_image.image.save(file.name, file, save=False)
+            reply_image.save(user=user)
             urls.append(reply_image.image.url)
 
         return {"image_urls": urls}

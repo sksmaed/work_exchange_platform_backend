@@ -101,6 +101,15 @@ class TestForumAPI:
         assert len(data["items"]) == 2
         assert data["has_next"] is True
 
+    def test_list_threads_page_size_capped(
+        self, client: Client, user: User, forum_category: ForumCategory
+    ) -> None:
+        """Test that page_size is capped at maximum (100)."""
+        response = client.get("/api/forum/threads?page_size=10000")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["page_size"] == 100
+
     def test_list_threads_filter_by_category(
         self, client: Client, forum_thread: ForumThread, forum_category: ForumCategory
     ) -> None:
@@ -110,6 +119,62 @@ class TestForumAPI:
         data = response.json()
         assert data["total"] == 1
         assert data["items"][0]["category_id"] == str(forum_category.id)
+
+    def test_list_threads_search_by_title(
+        self, client: Client, forum_thread: ForumThread, user: User, forum_category: ForumCategory
+    ) -> None:
+        """Test searching threads by title."""
+        matching_thread = ForumThread.objects.create(
+            title="UniqueTitle123",
+            content="Some content",
+            author=user,
+            category=forum_category,
+        )
+        ForumThread.objects.create(
+            title="Another thread",
+            content="Irrelevant content",
+            author=user,
+            category=forum_category,
+        )
+        response = client.get("/api/forum/threads?search=UniqueTitle123")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["title"] == matching_thread.title
+
+    def test_list_threads_search_by_content(
+        self, client: Client, forum_thread: ForumThread, user: User, forum_category: ForumCategory
+    ) -> None:
+        """Test searching threads by content."""
+        matching_thread = ForumThread.objects.create(
+            title="Some title",
+            content="Body with SpecialKeywordXYZ",
+            author=user,
+            category=forum_category,
+        )
+        ForumThread.objects.create(
+            title="Different title",
+            content="No matching keyword here",
+            author=user,
+            category=forum_category,
+        )
+        response = client.get("/api/forum/threads?search=SpecialKeywordXYZ")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["title"] == matching_thread.title
+
+    def test_list_threads_search_no_results(
+        self, client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test searching threads with no matching results."""
+        response = client.get("/api/forum/threads?search=NoMatchStringXYZ")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 0
+        assert data["items"] == []
 
     def test_get_thread_public(
         self, client: Client, forum_thread: ForumThread, forum_reply: ForumReply, user: User
@@ -480,3 +545,51 @@ class TestForumImageUpload:
         response = auth_client.get(f"/api/forum/threads/{forum_thread.id}")
         assert response.status_code == 200
         assert len(response.json()["image_urls"]) == 1
+
+    def test_add_thread_images_invalid_content_type(
+        self, auth_client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test that non-image files are rejected for thread upload."""
+        pdf_file = SimpleUploadedFile(
+            "document.pdf",
+            b"%PDF-1.4 fake pdf content",
+            content_type="application/pdf",
+        )
+        response = auth_client.post(
+            f"/api/forum/threads/{forum_thread.id}/images",
+            data={"images": pdf_file},
+            format="multipart",
+        )
+        assert response.status_code == 400
+
+    def test_add_thread_images_invalid_image_type(
+        self, auth_client: Client, forum_thread: ForumThread
+    ) -> None:
+        """Test that unsupported image types (e.g. BMP) are rejected."""
+        bmp_file = SimpleUploadedFile(
+            "image.bmp",
+            b"fake bmp content",
+            content_type="image/bmp",
+        )
+        response = auth_client.post(
+            f"/api/forum/threads/{forum_thread.id}/images",
+            data={"images": bmp_file},
+            format="multipart",
+        )
+        assert response.status_code == 400
+
+    def test_add_reply_images_invalid_content_type(
+        self, auth_client: Client, forum_reply: ForumReply
+    ) -> None:
+        """Test that non-image files are rejected for reply upload."""
+        text_file = SimpleUploadedFile(
+            "readme.txt",
+            b"plain text content",
+            content_type="text/plain",
+        )
+        response = auth_client.post(
+            f"/api/forum/replies/{forum_reply.id}/images",
+            data={"images": text_file},
+            format="multipart",
+        )
+        assert response.status_code == 400
