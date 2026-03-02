@@ -4,6 +4,7 @@ from ninja.openapi.docs import Redoc
 from ninja_extra import NinjaExtraAPI
 
 from common.exceptions import BaseAPIException
+from features.chat.apis import ChatControllerAPI
 from features.core.api import SocialAuthController
 from features.forum.apis import ForumControllerAPI
 from features.helper.resume.apis import HelperResumeAPI
@@ -41,4 +42,5 @@ def health_check(request: WSGIRequest):  # noqa: ARG001
 api.register_controllers(HelperResumeAPI)
 api.register_controllers(SocialAuthController)
 api.register_controllers(HostControllerAPI)
+api.register_controllers(ChatControllerAPI)
 api.register_controllers(ForumControllerAPI)

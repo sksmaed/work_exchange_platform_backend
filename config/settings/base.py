@@ -73,12 +73,18 @@ APPS = [
     "ninja",
     "ninja_extra",
     "guardian",
+    "channels",
 ]
 LOCAL_APPS = [
     "features.core",
     "features.helper",
     "features.host",
+<<<<<<< HEAD
+    "features.application",
+    "features.chat",
+=======
     "features.forum",
+>>>>>>> origin/main
     "features.helper.resume",
 ]
 INSTALLED_APPS = APPS + LOCAL_APPS
@@ -144,6 +150,16 @@ CACHES = {
     "default": {
         "BACKEND": env("CACHES_BACKEND", default="django_valkey.cache.ValkeyCache"),
         "LOCATION": env("CACHES_LOCATION", default="redis://localhost:6379/0"),
+    },
+}
+
+# Channel Layers (Django Channels)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [env("CHANNEL_LAYERS_REDIS_LOCATION", default="redis://localhost:6379/1")],
+        },
     },
 }
 
