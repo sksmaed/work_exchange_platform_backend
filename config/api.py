@@ -4,9 +4,11 @@ from ninja.openapi.docs import Redoc
 from ninja_extra import NinjaExtraAPI
 
 from common.exceptions import BaseAPIException
+from features.application.apis import ApplicationControllerAPI
 from features.chat.apis import ChatControllerAPI
 from features.core.api import SocialAuthController
 from features.forum.apis import ForumControllerAPI
+from features.helper.apis import HelperControllerAPI
 from features.helper.resume.apis import HelperResumeAPI
 from features.host.apis import HostControllerAPI
 
@@ -44,3 +46,5 @@ api.register_controllers(SocialAuthController)
 api.register_controllers(HostControllerAPI)
 api.register_controllers(ChatControllerAPI)
 api.register_controllers(ForumControllerAPI)
+api.register_controllers(HelperControllerAPI)
+api.register_controllers(ApplicationControllerAPI)

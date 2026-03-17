@@ -1,11 +1,16 @@
 from django.core.handlers.wsgi import WSGIRequest
 from django.db import IntegrityError
-from django.db.models import QuerySet
+from django.db.models import F, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 
-from common.exceptions import DuplicateKeyException, Http403ForbiddenException, KeyNotFoundException
+from common.exceptions import (
+    DuplicateKeyException,
+    Http400BadRequestException,
+    Http403ForbiddenException,
+    KeyNotFoundException,
+)
 from features.application.exceptions import ApplicationAlreadyExistsError, ApplicationNotFoundError
 from features.application.models import Application
 from features.application.schemas import (
@@ -32,6 +37,25 @@ class ApplicationControllerAPI:
         # Get the vacancy
         vacancy = get_object_or_404(Vacancy, id=data.vacancy_id)
 
+        # Validate start_date and end_date
+        if data.start_date > data.end_date:
+            raise Http400BadRequestException("Start date cannot be after end date")
+
+        # Check if the requested dates fall within any of the vacancy's availability periods with enough capacity
+        from features.host.models import VacancyAvailability  # noqa: PLC0415
+
+        valid_availability = VacancyAvailability.objects.filter(
+            vacancy=vacancy,
+            start_date__lte=data.start_date,
+            end_date__gte=data.end_date,
+            current_helpers__lt=F("capacity"),
+        ).first()
+
+        if not valid_availability:
+            raise Http400BadRequestException(
+                "The requested dates are not available or the vacancy is full for this period."
+            )
+
         # Check if application already exists
         try:
             application = Application(
@@ -42,10 +66,11 @@ class ApplicationControllerAPI:
                 status=Application.StatusChoices.PENDING,
             )
             application.save(user=user)
-            return application
         except IntegrityError:
             # Duplicate application (unique_together constraint)
             raise DuplicateKeyException(ApplicationAlreadyExistsError, data.vacancy_id)
+        else:
+            return application
 
     @route.get("/self/", response={200: list[ApplicationResponseSchema]})
     def get_self_applications(self, request: WSGIRequest) -> QuerySet[Application]:
@@ -59,7 +84,6 @@ class ApplicationControllerAPI:
         hosts = Host.objects.filter(user=user)
 
         # Build query: applications where user is helper OR vacancy's host
-        from django.db.models import Q
 
         filters = Q()
         if helper:
@@ -144,4 +168,3 @@ class ApplicationControllerAPI:
         application.save(user=user, update_fields=["status"])
 
         return application
-
