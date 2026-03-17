@@ -1,5 +1,5 @@
 from django.core.handlers.wsgi import WSGIRequest
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Exists, F, OuterRef, Q, QuerySet
 from ninja_extra import api_controller, route
 from ninja_extra.ordering import Ordering, ordering
 from ninja_extra.pagination import PageNumberPagination, paginate
@@ -231,3 +231,35 @@ class HostControllerAPI:
 
         vacancy.delete()
         return {"detail": "Vacancy deleted successfully"}
+
+
+@api_controller(prefix_or_class="vacancies", tags=["vacancies"])
+class VacancyControllerAPI:
+    """API endpoints for managing vacancies across all hosts."""
+
+    @route.get("/search", response={200: NinjaPaginationResponseSchema[VacancyResponseSchema]})
+    @paginate(PageNumberPagination)
+    @searching(Searching, search_fields=["name", "description", "expected_personality"])
+    @ordering(Ordering, ordering_fields=["created_at"])
+    def search_vacancies(
+        self,
+        request: WSGIRequest,  # noqa: ARG002
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> QuerySet[Vacancy]:
+        """Search active vacancies with available capacity, optionally matching a specific date range."""
+        from django.utils import timezone  # noqa: PLC0415
+
+        filters = Q(status=Vacancy.StatusChoices.RECRUITING)
+
+        # Must have at least one availability that is not full and ending in the future
+        avail_filters = Q(end_date__gte=timezone.now().date(), current_helpers__lt=F("capacity"))
+
+        if start_date and end_date:
+            avail_filters &= Q(start_date__lte=start_date, end_date__gte=end_date)
+
+        active_availabilities = VacancyAvailability.objects.filter(avail_filters)
+
+        filters &= Q(id__in=active_availabilities.values("vacancy_id"))
+
+        return Vacancy.objects.filter(filters).distinct().order_by("-created_at")

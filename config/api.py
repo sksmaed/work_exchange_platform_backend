@@ -5,12 +5,13 @@ from ninja_extra import NinjaExtraAPI
 
 from common.exceptions import BaseAPIException
 from features.application.apis import ApplicationControllerAPI
+from features.calendar.apis import CalendarControllerAPI
 from features.chat.apis import ChatControllerAPI
 from features.core.api import SocialAuthController
 from features.forum.apis import ForumControllerAPI
 from features.helper.apis import HelperControllerAPI
 from features.helper.resume.apis import HelperResumeAPI
-from features.host.apis import HostControllerAPI
+from features.host.apis import HostControllerAPI, VacancyControllerAPI
 
 api = NinjaExtraAPI(
     title="Work Exchange Platform API",
@@ -48,3 +49,5 @@ api.register_controllers(ChatControllerAPI)
 api.register_controllers(ForumControllerAPI)
 api.register_controllers(HelperControllerAPI)
 api.register_controllers(ApplicationControllerAPI)
+api.register_controllers(VacancyControllerAPI)
+api.register_controllers(CalendarControllerAPI)

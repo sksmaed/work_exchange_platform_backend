@@ -106,3 +106,98 @@ class TestApplicationAPI:
         assert response.status_code == 400
         response_json = response.json()
         assert "not available" in response_json["message"]
+
+    @pytest.mark.django_db
+    def test_update_application_status_accept_deducts_capacity(
+        self,
+        authenticated_host_client: Client,
+        test_vacancy: Vacancy,
+        test_vacancy_availability: VacancyAvailability,
+        helper_model,
+        test_host: Host,
+    ):
+        """Host accepts an application, capacity should be deducted (current_helpers increased)."""
+        application = Application.objects.create(
+            helper=helper_model,
+            vacancy=test_vacancy,
+            start_date=date(2025, 5, 10),
+            end_date=date(2025, 5, 20),
+            status=Application.StatusChoices.PENDING,
+        )
+
+        test_vacancy_availability.current_helpers = 0
+        test_vacancy_availability.save()
+
+        url = f"/api/applications/{application.id}/status"
+        payload = {"status": Application.StatusChoices.ACCEPTED}
+        
+        response = authenticated_host_client.patch(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        
+        test_vacancy_availability.refresh_from_db()
+        assert test_vacancy_availability.current_helpers == 1
+
+    @pytest.mark.django_db
+    def test_update_application_status_accept_full_capacity_fails(
+        self,
+        authenticated_host_client: Client,
+        test_vacancy: Vacancy,
+        test_vacancy_availability: VacancyAvailability,
+        helper_model,
+    ):
+        """Host tries to accept an application but capacity is full."""
+        application = Application.objects.create(
+            helper=helper_model,
+            vacancy=test_vacancy,
+            start_date=date(2025, 5, 10),
+            end_date=date(2025, 5, 20),
+            status=Application.StatusChoices.PENDING,
+        )
+
+        test_vacancy_availability.current_helpers = test_vacancy_availability.capacity
+        test_vacancy_availability.save()
+
+        url = f"/api/applications/{application.id}/status"
+        payload = {"status": Application.StatusChoices.ACCEPTED}
+        
+        response = authenticated_host_client.patch(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "reached its capacity limit" in response.json().get("message", "")
+
+    @pytest.mark.django_db
+    def test_withdraw_application_restores_capacity(
+        self,
+        authenticated_helper_client: Client,
+        test_vacancy: Vacancy,
+        test_vacancy_availability: VacancyAvailability,
+        helper_model,
+    ):
+        """Helper withdraws an accepted application, capacity should be restored."""
+        application = Application.objects.create(
+            helper=helper_model,
+            vacancy=test_vacancy,
+            start_date=date(2025, 5, 10),
+            end_date=date(2025, 5, 20),
+            status=Application.StatusChoices.ACCEPTED,
+        )
+
+        test_vacancy_availability.current_helpers = 1
+        test_vacancy_availability.save()
+
+        url = f"/api/applications/{application.id}"
+        response = authenticated_helper_client.delete(url)
+        assert response.status_code == 200
+        
+        test_vacancy_availability.refresh_from_db()
+        assert test_vacancy_availability.current_helpers == 0
+        
+        application.refresh_from_db()
+        assert application.status == Application.StatusChoices.WITHDRAWN
