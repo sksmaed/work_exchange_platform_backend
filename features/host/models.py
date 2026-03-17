@@ -57,7 +57,7 @@ class Host(BaseModel):
         "core.User",
         on_delete=models.CASCADE,
     )
-    name: models.CharField(
+    name = models.CharField(
         max_length=100,
     )
     address = models.CharField(
@@ -208,3 +208,31 @@ class Vacancy(BaseModel):
         choices=StatusChoices.choices,
         default=StatusChoices.RECRUITING,
     )
+
+
+class VacancyAvailability(BaseModel):
+    """Represents a continuous availability period for a vacancy.
+
+    Attributes:
+    ----------
+    vacancy : ForeignKey
+        Reference to the associated vacancy.
+    start_date : DateField
+        Start date of the availability period.
+    end_date : DateField
+        End date of the availability period.
+    capacity : IntegerField
+        Total number of slots available for this period.
+    current_helpers : IntegerField
+        Number of currently accepted helpers for this period.
+    """
+
+    vacancy = models.ForeignKey(
+        "host.Vacancy",
+        on_delete=models.CASCADE,
+        related_name="availabilities",
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    capacity = models.IntegerField(default=1)
+    current_helpers = models.IntegerField(default=0)

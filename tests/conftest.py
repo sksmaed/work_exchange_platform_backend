@@ -50,7 +50,7 @@ def user(db: None) -> AbstractUser:
 @pytest.mark.django_db
 def superuser(db: None) -> AbstractUser:
     """Create a superuser."""
-    return User.objects.create_superuser(email=TEST_SUPERUSER_EMAIL, password=TEST_PASSWORD)
+    return User.objects.create_superuser(username="test_super_user", email=TEST_SUPERUSER_EMAIL, password=TEST_PASSWORD)
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def authenticated_superuser_client(superuser_client: Client, superuser: Abstract
 @pytest.mark.django_db
 def helper_model(user: AbstractUser) -> HelperModel:
     """Create a helper model."""
-    return HelperModel.objects.create(
+    helper = HelperModel(
         user=user,
         description="Test helper description",
         birthday="1990-01-01",
@@ -99,6 +99,8 @@ def helper_model(user: AbstractUser) -> HelperModel:
         languages=["Chinese", "English"],
         avg_rating=4.5,
     )
+    helper.save(user=user)
+    return helper
 
 
 @pytest.fixture

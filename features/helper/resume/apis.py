@@ -38,7 +38,7 @@ class HelperResumeAPI:
             certifications=payload.certifications or [],
             availability=payload.availability or [],
             preferred_locations=payload.preferred_locations or [],
-            contact_email=payload.contact_email or None,
+            contact_email=payload.contact_email or "",
             contact_phone=payload.contact_phone or "",
         )
         return 201, self._to_schema(resume)

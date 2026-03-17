@@ -7,9 +7,16 @@ from ninja_extra.schemas import NinjaPaginationResponseSchema
 from ninja_extra.searching import Searching, searching
 
 from common.exceptions import Http403ForbiddenException, KeyNotFoundException
-from features.host.exceptions import HostNotFoundError
-from features.host.models import Host
-from features.host.schemas import HostCreateSchema, HostResponseSchema, HostUpdateSchema
+from features.host.exceptions import HostNotFoundError, VacancyNotFoundError
+from features.host.models import Host, Vacancy, VacancyAvailability
+from features.host.schemas import (
+    HostCreateSchema,
+    HostResponseSchema,
+    HostUpdateSchema,
+    VacancyCreateSchema,
+    VacancyResponseSchema,
+    VacancyUpdateSchema,
+)
 
 
 @api_controller(prefix_or_class="hosts", tags=["hosts"])
@@ -37,12 +44,17 @@ class HostControllerAPI:
         if host_type:
             filters &= Q(type__icontains=host_type)
         if month:
-            # TODO(sks): Implement month-based filtering logic with vacancy dates  # noqa: TD003
-            pass
+            from django.db.models.functions import ExtractMonth  # noqa: PLC0415
+
+            # Filter hosts that have vacancies with available space in the specified month
+            month_availabilities = VacancyAvailability.objects.annotate(
+                start_month=ExtractMonth("start_date"), end_month=ExtractMonth("end_date")
+            ).filter(start_month__lte=month, end_month__gte=month)
+            filters &= Q(id__in=month_availabilities.values("vacancy__host"))
         if duration:
             filters &= Q(expected_duration=duration)
 
-        exclude_children_subquery = Host.objects.filter(id=OuterRef("id")).exclude(
+        exclude_children_subquery = Vacancy.objects.filter(host_id=OuterRef("id")).exclude(
             Q(expected_age__icontains="18") | Q(expected_age="")
         )
 
@@ -69,11 +81,6 @@ class HostControllerAPI:
             facilities=data.facilities or "",
             other=data.other or "",
             expected_duration=data.expected_duration or "",
-            expected_licenses=data.expected_licenses or "None",
-            expected_age=data.expected_age or "",
-            expected_gender=data.expected_gender or "",
-            expected_personality=data.expected_personality or "",
-            expected_other_requirements=data.expected_other_requirements or "",
             recruitment_slogan=data.recruitment_slogan or "",
         )
         host.save(user=user)
@@ -113,3 +120,114 @@ class HostControllerAPI:
 
         host.delete()
         return {"detail": "Host deleted successfully"}
+
+    @route.get("/{host_id}/vacancies", response={200: list[VacancyResponseSchema]})
+    def list_vacancies(self, request: WSGIRequest, host_id: str) -> QuerySet[Vacancy]:  # noqa: ARG002
+        """Retrieve a list of vacancies for a specific host."""
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        # Allow anyone to see vacancies of a host, or restrict to host owner depending on requirements.
+        # Here we allow public read for vacancies of a valid host.
+        return Vacancy.objects.filter(host=host).order_by("-created_at")
+
+    @route.get("/vacancies/{vacancy_id}", response={200: VacancyResponseSchema})
+    def get_vacancy(self, request: WSGIRequest, vacancy_id: str) -> Vacancy:  # noqa: ARG002
+        """Retrieve details of a specific vacancy."""
+        try:
+            return Vacancy.objects.select_related("host").get(id=vacancy_id)
+        except Vacancy.DoesNotExist:
+            raise KeyNotFoundException(VacancyNotFoundError, vacancy_id)
+
+    @route.post("/{host_id}/vacancies", response={201: VacancyResponseSchema})
+    def create_vacancy(self, request: WSGIRequest, host_id: str, data: VacancyCreateSchema) -> Vacancy:
+        """Create a new vacancy for a host."""
+        user = request.user
+
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        if host.user != user:
+            raise Http403ForbiddenException("You do not have permission to add vacancies to this host")
+
+        vacancy = Vacancy(
+            host=host,
+            name=data.name,
+            work_time=data.work_time,
+            description=data.description,
+            expected_duration=data.expected_duration,
+            expected_age=data.expected_age,
+            expected_gender=data.expected_gender,
+            expected_licenses=data.expected_licenses,
+            expected_personality=data.expected_personality,
+        )
+        vacancy.save(user=user)
+
+        # Create availabilities
+        for avail_data in data.availabilities:
+            VacancyAvailability.objects.create(
+                vacancy=vacancy,
+                start_date=avail_data["start_date"],
+                end_date=avail_data["end_date"],
+                capacity=avail_data.get("capacity", 1),
+                current_helpers=avail_data.get("current_helpers", 0),
+                created_by_user=user,
+                updated_by_user=user,
+            )
+
+        return vacancy
+
+    @route.patch("/vacancies/{vacancy_id}", response=VacancyResponseSchema)
+    def update_vacancy(self, request: WSGIRequest, vacancy_id: str, data: VacancyUpdateSchema) -> Vacancy:
+        """Update an existing vacancy."""
+        user = request.user
+
+        try:
+            vacancy = Vacancy.objects.select_related("host").get(id=vacancy_id)
+        except Vacancy.DoesNotExist:
+            raise KeyNotFoundException(VacancyNotFoundError, vacancy_id)
+
+        if vacancy.host.user != user:
+            raise Http403ForbiddenException("You do not have permission to update this vacancy")
+
+        update_data = data.model_dump(exclude_unset=True, exclude={"availabilities"})
+        for field, value in update_data.items():
+            setattr(vacancy, field, value)
+
+        vacancy.save(user=user, update_fields=list(update_data.keys()))
+
+        # Update availabilities if provided
+        if data.availabilities is not None:
+            # For simplicity, replace all existings with new ones, or you could do a more careful sync
+            vacancy.availabilities.all().delete()
+            for avail_data in data.availabilities:
+                VacancyAvailability.objects.create(
+                    vacancy=vacancy,
+                    start_date=avail_data["start_date"],
+                    end_date=avail_data["end_date"],
+                    capacity=avail_data.get("capacity", 1),
+                    current_helpers=avail_data.get("current_helpers", 0),
+                    created_by_user=user,
+                    updated_by_user=user,
+                )
+
+        return vacancy
+
+    @route.delete("/vacancies/{vacancy_id}")
+    def delete_vacancy(self, request: WSGIRequest, vacancy_id: str) -> dict:
+        """Delete a vacancy."""
+        user = request.user
+
+        vacancy = Vacancy.objects.filter(id=vacancy_id).select_related("host").first()
+        if not vacancy:
+            raise KeyNotFoundException(VacancyNotFoundError, vacancy_id)
+
+        if vacancy.host.user != user:
+            raise Http403ForbiddenException("You do not have permission to delete this vacancy")
+
+        vacancy.delete()
+        return {"detail": "Vacancy deleted successfully"}
