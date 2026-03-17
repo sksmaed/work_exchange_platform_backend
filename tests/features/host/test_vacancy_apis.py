@@ -1,6 +1,8 @@
 import pytest
 
-from features.host.models import Host, Vacancy
+from datetime import date, timedelta
+from django.utils import timezone
+from features.host.models import Host, Vacancy, VacancyAvailability
 
 
 @pytest.fixture
@@ -127,3 +129,52 @@ class TestVacancyAPI:
         response = client.delete(url)
         assert response.status_code == 200
         assert Vacancy.objects.count() == 0
+
+    def test_search_vacancies(self, client, test_vacancy):
+        # Create an availability for the vacancy that is active
+        today = timezone.now().date()
+        VacancyAvailability.objects.create(
+            vacancy=test_vacancy,
+            start_date=today,
+            end_date=today + timedelta(days=30),
+            capacity=2,
+            current_helpers=0,
+        )
+
+        url = "/api/vacancies/search"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data['items']) == 1
+        assert data['items'][0]['id'] == str(test_vacancy.id)
+        
+        # Test filters
+        url_filtered = f"/api/vacancies/search?start_date={today.isoformat()}&end_date={(today + timedelta(days=5)).isoformat()}"
+        response = client.get(url_filtered)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data['items']) == 1
+
+        # Test filters out of bounds
+        url_filtered_out = f"/api/vacancies/search?start_date={(today - timedelta(days=10)).isoformat()}&end_date={(today - timedelta(days=5)).isoformat()}"
+        response = client.get(url_filtered_out)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data['items']) == 0
+
+    def test_search_vacancies_full_capacity(self, client, test_vacancy):
+        # Create a full availability
+        today = timezone.now().date()
+        VacancyAvailability.objects.create(
+            vacancy=test_vacancy,
+            start_date=today,
+            end_date=today + timedelta(days=30),
+            capacity=2,
+            current_helpers=2,
+        )
+
+        url = "/api/vacancies/search"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data['items']) == 0

@@ -21,6 +21,8 @@ from features.application.schemas import (
 from features.helper.models import HelperModel
 from features.host.models import Host, Vacancy
 
+MAX_VACANCY_CAPACITY = 20
+
 
 @api_controller(prefix_or_class="applications", tags=["applications"], permissions=[IsAuthenticated])
 class ApplicationControllerAPI:
@@ -133,6 +135,24 @@ class ApplicationControllerAPI:
         if application.helper.user != user:
             raise Http403ForbiddenException("You do not have permission to withdraw this application")
 
+        old_status = application.status
+        if old_status == Application.StatusChoices.ACCEPTED:
+            from features.calendar.models import CalendarEvent  # noqa: PLC0415
+            from features.host.models import VacancyAvailability  # noqa: PLC0415
+
+            availability = VacancyAvailability.objects.filter(
+                vacancy=application.vacancy,
+                start_date__lte=application.start_date,
+                end_date__gte=application.end_date,
+            ).first()
+
+            if availability:
+                availability.current_helpers = F("current_helpers") - 1
+                availability.save(update_fields=["current_helpers"])
+
+            # Delete associated calendar event
+            CalendarEvent.objects.filter(application=application).delete()
+
         # Update status to withdrawn instead of deleting
         application.status = Application.StatusChoices.WITHDRAWN
         application.save(user=user, update_fields=["status"])
@@ -163,8 +183,53 @@ class ApplicationControllerAPI:
                 f"Status must be '{Application.StatusChoices.ACCEPTED}' or '{Application.StatusChoices.REJECTED}'"
             )
 
+        from features.calendar.models import CalendarEvent  # noqa: PLC0415
+        from features.host.models import VacancyAvailability  # noqa: PLC0415
+
+        old_status = application.status
+        new_status = data.status
+
+        # Capacity and Calendar management
+        if old_status != new_status:
+            availability = VacancyAvailability.objects.filter(
+                vacancy=application.vacancy,
+                start_date__lte=application.start_date,
+                end_date__gte=application.end_date,
+            ).first()
+
+            if availability:
+                if new_status == Application.StatusChoices.ACCEPTED:
+                    # Check capacity
+                    if (
+                        availability.current_helpers >= availability.capacity
+                        or availability.current_helpers >= MAX_VACANCY_CAPACITY
+                    ):
+                        raise Http400BadRequestException("The vacancy has reached its capacity limit.")
+                    availability.current_helpers = F("current_helpers") + 1
+                    availability.save(update_fields=["current_helpers"])
+
+                    # Create calendar event
+                    CalendarEvent.objects.create(
+                        host=application.vacancy.host,
+                        helper=application.helper,
+                        application=application,
+                        start_date=application.start_date,
+                        end_date=application.end_date,
+                        remarks=f"Application accepted for {application.vacancy.name}.",
+                    )
+                elif (
+                    old_status == Application.StatusChoices.ACCEPTED
+                    and new_status == Application.StatusChoices.REJECTED
+                ):
+                    # Deduct capacity
+                    availability.current_helpers = F("current_helpers") - 1
+                    availability.save(update_fields=["current_helpers"])
+
+                    # Remove calendar event
+                    CalendarEvent.objects.filter(application=application).delete()
+
         # Update status
-        application.status = data.status
+        application.status = new_status
         application.save(user=user, update_fields=["status"])
 
         return application
