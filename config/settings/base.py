@@ -84,6 +84,8 @@ LOCAL_APPS = [
     "features.forum",
     "features.helper.resume",
     "features.calendar",
+    "features.album",
+    "features.post",
 ]
 INSTALLED_APPS = APPS + LOCAL_APPS
 
