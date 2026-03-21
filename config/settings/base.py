@@ -64,6 +64,7 @@ APPS = [
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
     "allauth.socialaccount.providers.facebook",
+    "allauth.socialaccount.providers.apple",
     # "allauth.headless",  # This module doesn't exist in this version
     "rest_framework",  # Django REST Framework
     "rest_framework.authtoken",  # Required for dj-rest-auth
@@ -218,6 +219,12 @@ SOCIALACCOUNT_PROVIDERS = {
         "LOCALE_FUNC": lambda _: "en_US",
         "VERIFIED_EMAIL": False,
         "VERSION": "v20.0",
+    },
+    "apple": {
+        "SCOPE": ["email", "name"],
+        "AUTH_PARAMS": {
+            "response_mode": "form_post",
+        },
     },
 }
 

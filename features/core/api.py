@@ -1,5 +1,6 @@
 from typing import Any
 
+from allauth.socialaccount.providers.apple.views import AppleOAuth2Adapter
 from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
@@ -32,6 +33,12 @@ class GoogleLoginRequestSchema(BaseModel):
     access_token: str
 
 
+class AppleLoginRequestSchema(BaseModel):
+    """Schema for Apple login request."""
+
+    id_token: str
+
+
 class FacebookLoginView(SocialLoginView):
     """Facebook OAuth2 login view."""
 
@@ -44,9 +51,15 @@ class GoogleLoginView(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
 
 
+class AppleLoginView(SocialLoginView):
+    """Apple OAuth2 login view."""
+
+    adapter_class = AppleOAuth2Adapter
+
+
 @api_controller("/social-auth", tags=["Social Authentication"])
 class SocialAuthController(ControllerBase):
-    """Social authentication controller for Facebook and Google login."""
+    """Social authentication controller for Google, Facebook, and Apple login."""
 
     @Route.post("/facebook/", url_name="facebook_login")
     def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> dict[str, Any]:
@@ -109,3 +122,34 @@ class SocialAuthController(ControllerBase):
             return {"error": "Google login error", "message": str(e)}
         else:
             return {"error": "Google login failed", "details": response.data}
+
+    @Route.post("/apple/", url_name="apple_login")
+    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> dict[str, Any]:
+        """Apple Sign In OAuth2 Login.
+
+        Exchange Apple identity token (id_token) for JWT tokens.
+
+        Args:
+            request: The HTTP request object
+            data: Apple login data containing id_token
+
+        Returns:
+            JWT tokens and user information
+        """
+        try:
+            view = AppleLoginView()
+            view.request = request
+
+            # Create a mock request with the identity token
+            mock_request = HttpRequest()
+            mock_request.method = "POST"
+            mock_request.POST = {"id_token": data.id_token}
+
+            response = view.post(mock_request)
+
+            if response.status_code == HTTP_OK:
+                return response.data
+        except Exception as e:
+            return {"error": "Apple login error", "message": str(e)}
+        else:
+            return {"error": "Apple login failed", "details": response.data}
