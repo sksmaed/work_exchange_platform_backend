@@ -26,19 +26,17 @@ class HostControllerAPI:
     @route.get("", response={200: NinjaPaginationResponseSchema[HostResponseSchema]})
     @paginate(PageNumberPagination)
     @searching(Searching, search_fields=["description", "type", "address"])
-    @ordering(Ordering, ordering_fields=["created_at"])
+    @ordering(Ordering, ordering_fields=["created_at", "avg_rating"])
     def list_hosts(
         self,
-        request: WSGIRequest,
+        request: WSGIRequest,  # noqa: ARG002
         address: str | None = None,
         host_type: str | None = None,
         month: int | None = None,
         duration: str | None = None,
     ) -> QuerySet[Host]:
         """Retrieve a list of hosts created by the authenticated user, with optional filtering by frequency."""
-        user = request.user
-
-        filters = Q(user=user)
+        filters = Q()
         if address:
             filters &= Q(address__icontains=address)
         if host_type:
@@ -62,6 +60,7 @@ class HostControllerAPI:
             Host.objects.filter(filters)
             .annotate(exclude_children=Exists(exclude_children_subquery))
             .select_related("user")
+            .prefetch_related("vacancy_set__availabilities")
         )
 
     @route.post("", response=HostResponseSchema)

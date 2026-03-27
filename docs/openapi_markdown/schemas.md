@@ -332,6 +332,9 @@ Schema for Host response.
 | Property | Type | Required | Description | Constraints |
 | --- | --- | --- | --- | --- |
 | exclude_children | boolean \| null | no |  |  |
+| months | array[integer] | no |  |  |
+| duration_options | array[string] | no |  |  |
+| keywords | array[string] | no |  |  |
 | id | string (uuid) \| null | no |  |  |
 | created_at | string (date-time) | yes |  |  |
 | created_by_user | string (uuid) \| null | no |  |  |

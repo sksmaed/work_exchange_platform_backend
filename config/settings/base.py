@@ -59,6 +59,7 @@ APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",  # Required for allauth
+    "corsheaders",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
@@ -92,6 +93,7 @@ INSTALLED_APPS = APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -252,6 +254,7 @@ REST_AUTH = {
     "USE_JWT": True,
     "JWT_AUTH_COOKIE": "access_token",
     "JWT_AUTH_REFRESH_COOKIE": "refresh_token",
+    "LOGIN_SERIALIZER": "features.core.serializers.LoginSerializer",
     "USER_DETAILS_SERIALIZER": "dj_rest_auth.serializers.UserDetailsSerializer",
 }
 

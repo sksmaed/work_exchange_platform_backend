@@ -1,14 +1,21 @@
+import re
 import typing
+from datetime import date
 
 from ninja import Field, ModelSchema, Schema
 
 from features.host.models import Host, Vacancy, VacancyAvailability
+
+MONTHS_PER_YEAR = 12
 
 
 class HostResponseSchema(ModelSchema):
     """Schema for Host response."""
 
     exclude_children: bool | None = None
+    months: list[int] = Field(default_factory=list)
+    duration_options: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
 
     class Meta:
         model = Host
@@ -16,6 +23,49 @@ class HostResponseSchema(ModelSchema):
             "updated_at",
             "updated_by_user",
         )
+
+    @staticmethod
+    def _month_iter(start: date, end: date) -> list[int]:
+        if not start or not end:
+            return []
+        current = date(start.year, start.month, 1)
+        end_month = date(end.year, end.month, 1)
+        months: list[int] = []
+        while current <= end_month:
+            months.append(current.month)
+            current = (
+                date(current.year + 1, 1, 1)
+                if current.month == MONTHS_PER_YEAR
+                else date(current.year, current.month + 1, 1)
+            )
+        return months
+
+    @staticmethod
+    def resolve_months(obj: Host) -> list[int]:
+        """Extract unique months from all vacancy availabilities."""
+        months: set[int] = set()
+        for vacancy in obj.vacancy_set.all():
+            for availability in vacancy.availabilities.all():
+                months.update(HostResponseSchema._month_iter(availability.start_date, availability.end_date))
+        return sorted(months)
+
+    @staticmethod
+    def resolve_duration_options(obj: Host) -> list[str]:
+        """Extract unique expected durations from the host's vacancies."""
+        durations: set[str] = set()
+        for vacancy in obj.vacancy_set.all():
+            if vacancy.expected_duration:
+                durations.add(vacancy.expected_duration)
+        if not durations and obj.expected_duration:
+            durations.add(obj.expected_duration)
+        return sorted(durations)
+
+    @staticmethod
+    def resolve_keywords(obj: Host) -> list[str]:
+        """Extract keywords from meals_offered and other text fields."""
+        if not obj.meals_offered:
+            return []
+        return [part.strip() for part in re.split(r"[,\n;/]+", obj.meals_offered) if part.strip()]
 
 
 class HostCreateSchema(Schema):

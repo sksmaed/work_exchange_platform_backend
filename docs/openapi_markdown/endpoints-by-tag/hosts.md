@@ -24,6 +24,41 @@
 | --- | --- | --- |
 | 200 | OK | application/json: NinjaPaginationResponseSchema_HostResponseSchema_ |
 
+**Response Example**
+```json
+{
+  "count": 2,
+  "items": [
+    {
+      "exclude_children": false,
+      "months": [3, 4, 5],
+      "duration_options": ["2 weeks", "1 month"],
+      "keywords": ["breakfast", "lunch"],
+      "id": "0f3a2b28-0b0e-4b6b-8b7a-7a3c2f8f2a10",
+      "created_at": "2026-03-27T09:15:30Z",
+      "created_by_user": "7d59a4e8-2b2a-4c1a-8c0c-3c8d5f7b2a01",
+      "user": "7d59a4e8-2b2a-4c1a-8c0c-3c8d5f7b2a01",
+      "name": "Sunny Farm",
+      "address": "Hsinchu",
+      "type": "farm",
+      "phone_number": "0912345678",
+      "contact_information": "Line: sunnyfarm",
+      "description": "Organic farm work exchange.",
+      "pocket_money": 0,
+      "meals_offered": "breakfast, lunch",
+      "dayoffs": "Sun",
+      "facilities": "WiFi",
+      "other": "",
+      "expected_duration": "1 month",
+      "vehicle": "None",
+      "recruitment_slogan": "Join us!",
+      "host_image": null,
+      "avg_rating": 4.6
+    }
+  ]
+}
+```
+
 ## POST `/api/hosts`
 
 - Create a new host entry.
