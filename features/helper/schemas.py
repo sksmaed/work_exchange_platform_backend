@@ -74,7 +74,7 @@ class HelperProfileResponseSchema(Schema):
     id: UUID
     description: str
     birthday: date
-    gender: str
+    gender: str | None = None
     residence: str
     expected_place: list[str]
     expected_time_periods: list[dict[str, Any]]

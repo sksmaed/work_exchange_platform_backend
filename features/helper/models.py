@@ -54,7 +54,8 @@ class HelperModel(BaseModel):
     gender = models.CharField(
         max_length=10,
         choices=GenderChoices.choices,
-        default=None,
+        default="",
+        blank=True,
     )
     residence = models.CharField(
         max_length=100,

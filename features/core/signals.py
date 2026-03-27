@@ -9,51 +9,44 @@ from features.host.models import Host
 
 
 @receiver(user_signed_up, sender=User)
-def create_user_profiles(sender: User, instance: User, created: bool, **kwargs: object) -> None:  # noqa: ARG001
-    """Create helper and/or host profiles when a new user is created.
+def create_user_profiles(sender: User, request, user: User, **kwargs: object) -> None:  # noqa: ARG001, ANN001
+    """Create helper and/or host profiles when a user signs up via allauth."""
+    with transaction.atomic():
+        if user.user_type in [User.UserTypeChoices.HELPER, User.UserTypeChoices.BOTH]:
+            HelperModel._default_manager.create(
+                user=user,  # audit fields
+                user_id=user.id,
+                description="New helper profile",
+                birthday=timezone.now().date(),
+                residence="",
+                expected_place=[],
+                expected_time_periods=[],
+                expected_treatments=[],
+                personality="",
+                motivation="",
+                hobbies="",
+                licenses=HelperModel.LicenseChoices.NONE,
+                languages=[],
+                avg_rating=0.0,
+            )
 
-    This signal is triggered when a user is created (including during registration).
-    It creates the appropriate profile(s) based on the user's type.
-    """
-    if created:
-        with transaction.atomic():
-            if instance.user_type in [User.UserTypeChoices.HELPER, User.UserTypeChoices.BOTH]:
-                HelperModel._default_manager.create(
-                    user=instance,
-                    description="New helper profile",
-                    birthday=timezone.now().date(),
-                    gender="",
-                    residence="",
-                    expected_place=[],
-                    expected_time_periods=[],
-                    expected_treatments=[],
-                    personality="",
-                    motivation="",
-                    hobbits="",
-                    licenses=HelperModel.LicenseChoices.NONE,
-                    languages=[],
-                    avg_rating=0.0,
-                )
-
-            if instance.user_type in [User.UserTypeChoices.HOST, User.UserTypeChoices.BOTH]:
-                Host._default_manager.create(
-                    user=instance,
-                    description="New host profile",
-                    address="",
-                    type="General",
-                    contact_information="",
-                    pocket_money=0,
-                    meals_offered="",
-                    dayoffs="",
-                    allowance="",
-                    facilities="",
-                    other="",
-                    expected_duration="",
-                    expected_licenses="",
-                    expected_age="",
-                    expected_gender="",
-                    expected_personality="",
-                    expected_other_requirements="",
-                    recruitment_slogan="",
-                    avg_rating=0.0,
-                )
+        if user.user_type in [User.UserTypeChoices.HOST, User.UserTypeChoices.BOTH]:
+            Host._default_manager.create(
+                user=user,  # audit fields
+                user_id=user.id,
+                name=user.name or user.email,
+                description="New host profile",
+                address="",
+                type="General",
+                phone_number="",
+                contact_information="",
+                pocket_money=0,
+                meals_offered="",
+                dayoffs="",
+                facilities="",
+                other="",
+                expected_duration="",
+                vehicle=Host.VehicleChoices.NONE,
+                recruitment_slogan="",
+                avg_rating=0.0,
+            )
