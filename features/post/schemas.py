@@ -26,6 +26,7 @@ class PostResponseSchema(Schema):
     id: UUID
     host_id: UUID
     content: str
+    type: str
     like_count: int
     comment_count: int
     photos: list[PostPhotoResponseSchema]
@@ -38,6 +39,16 @@ class PostListResponseSchema(Schema):
     """Post list response schema."""
 
     host_id: UUID
+    posts: list[PostResponseSchema]
+    total: int
+    page: int
+    page_size: int
+    has_next: bool
+
+
+class AllPostListResponseSchema(Schema):
+    """All posts list response schema."""
+
     posts: list[PostResponseSchema]
     total: int
     page: int

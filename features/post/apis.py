@@ -9,12 +9,14 @@ from ninja import File, Form, UploadedFile
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 
-from common.exceptions import Http403ForbiddenException
+from common.exceptions import Http403ForbiddenException, KeyNotFoundException
 from features.core.models import User
+from features.host.exceptions import HostNotFoundError
 from features.host.models import Host
 from features.post.exceptions import CommentNotFoundError, PostInvalidImageError, PostNotFoundError
 from features.post.models import Comment, Post, PostLike, PostPhoto
 from features.post.schemas import (
+    AllPostListResponseSchema,
     CommentListResponseSchema,
     CommentResponseSchema,
     PostLikeResponseSchema,
@@ -35,6 +37,21 @@ def _is_host_owner(request_user: User, host: Host) -> bool:
     return host.user_id == request_user.id
 
 
+def _derive_post_type(content: str) -> str:
+    if "小幫手" in (content or ""):
+        return "helper"
+    if "店家" in (content or ""):
+        return "host"
+    return "all"
+
+
+def _get_host(host_id: str) -> Host:
+    try:
+        return get_object_or_404(Host, id=host_id)
+    except ValidationError:
+        raise KeyNotFoundException(HostNotFoundError, host_id)
+
+
 def _transform_post_response(post: Post, request_user: User | None) -> PostResponseSchema:
     photos = [
         PostPhotoResponseSchema(id=photo.id, image_url=photo.image.url, order=photo.order)
@@ -48,6 +65,7 @@ def _transform_post_response(post: Post, request_user: User | None) -> PostRespo
         id=post.id,
         host_id=post.host_id,
         content=post.content,
+        type=_derive_post_type(post.content),
         like_count=post.like_count,
         comment_count=post.comment_count,
         photos=photos,
@@ -72,7 +90,7 @@ class HostPostControllerAPI:
         images: list[UploadedFile] | None = File(None),
     ) -> dict[str, str | PostResponseSchema]:
         """Create a post for the host."""
-        host = get_object_or_404(Host, id=host_id)
+        host = _get_host(host_id)
         if not _is_host_owner(request.user, host):
             raise Http403ForbiddenException("Only the host owner can perform this action")
 
@@ -102,7 +120,7 @@ class HostPostControllerAPI:
         page_size: int = 20,
     ) -> PostListResponseSchema:
         """List posts for a host."""
-        host = get_object_or_404(Host, id=host_id)
+        host = _get_host(host_id)
         page_size = min(page_size, self.MAX_PAGE_SIZE)
 
         queryset: QuerySet[Post] = Post.objects.filter(host=host).prefetch_related("photos")
@@ -125,6 +143,29 @@ class PostActionControllerAPI:
     """API endpoints for specific post interactions."""
 
     MAX_PAGE_SIZE: ClassVar[int] = 100
+
+    @route.get("", response=AllPostListResponseSchema)
+    def list_all_posts(
+        self,
+        request: WSGIRequest,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> AllPostListResponseSchema:
+        """List all posts across hosts."""
+        page_size = min(page_size, self.MAX_PAGE_SIZE)
+
+        queryset: QuerySet[Post] = Post.objects.all().prefetch_related("photos")
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+
+        posts = [_transform_post_response(post, request.user) for post in page_obj.object_list]
+        return AllPostListResponseSchema(
+            posts=posts,
+            total=paginator.count,
+            page=page,
+            page_size=page_size,
+            has_next=page_obj.has_next(),
+        )
 
     @route.get("/{post_id}")
     def get_post(self, request: WSGIRequest, post_id: str) -> dict[str, PostResponseSchema]:

@@ -4,9 +4,7 @@ from django.test import Client
 
 from features.core.models import User
 from features.host.models import Host
-from features.post.models import Comment
-from features.post.models import Post
-from features.post.models import PostLike
+from features.post.models import Comment, Post
 
 
 @pytest.fixture
@@ -102,12 +100,23 @@ class TestPostAPI:
         data = response.json()
         assert data["total"] == 1
         assert data["posts"][0]["content"] == "Original Post Content"
+        assert data["posts"][0]["type"] == "all"
+
+    def test_list_all_posts(self, client: Client, host: Host, test_post: Post):
+        response = client.get("/api/posts")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["posts"][0]["content"] == "Original Post Content"
+        assert data["posts"][0]["host_id"] == str(host.id)
+
+    def test_list_posts_invalid_host_id_returns_404(self, client: Client):
+        response = client.get("/api/hosts/1/posts")
+        assert response.status_code == 404
 
     def test_update_post(self, host_client: Client, test_post: Post):
         response = host_client.patch(
-            f"/api/posts/{test_post.id}",
-            data={"content": "Updated Content"},
-            content_type="application/json"
+            f"/api/posts/{test_post.id}", data={"content": "Updated Content"}, content_type="application/json"
         )
         assert response.status_code == 200
         assert response.json()["data"]["content"] == "Updated Content"
@@ -120,21 +129,18 @@ class TestPostAPI:
         assert Post.objects.filter(id=test_post.id).count() == 0
 
     def test_create_comment(self, other_client: Client, test_post: Post):
-        response = other_client.post(
-            f"/api/posts/{test_post.id}/comments",
-            data={"content": "Nice post!"}
-        )
+        response = other_client.post(f"/api/posts/{test_post.id}/comments", data={"content": "Nice post!"})
         assert response.status_code == 200
         data = response.json()["data"]
         assert data["content"] == "Nice post!"
-        
+
         test_post.refresh_from_db()
         assert test_post.comment_count == 1
 
     def test_list_comments(self, client: Client, test_post: Post, other_user: User):
         c = Comment(post=test_post, user=other_user, content="Comment 1")
         c.save(user=other_user)
-        
+
         response = client.get(f"/api/posts/{test_post.id}/comments")
         assert response.status_code == 200
         data = response.json()
@@ -146,7 +152,7 @@ class TestPostAPI:
         c.save(user=other_user)
         test_post.comment_count += 1
         test_post.save(user=other_user)
-        
+
         response = other_client.delete(f"/api/posts/{test_post.id}/comments/{c.id}")
         assert response.status_code == 200
         test_post.refresh_from_db()
@@ -157,7 +163,7 @@ class TestPostAPI:
         c.save(user=other_user)
         test_post.comment_count += 1
         test_post.save(user=other_user)
-        
+
         response = host_client.delete(f"/api/posts/{test_post.id}/comments/{c.id}")
         assert response.status_code == 200
         test_post.refresh_from_db()
@@ -170,7 +176,7 @@ class TestPostAPI:
         assert response.json()["data"]["liked"] is True
         test_post.refresh_from_db()
         assert test_post.like_count == 1
-        
+
         # Unlike
         response = other_client.post(f"/api/posts/{test_post.id}/likes")
         assert response.status_code == 200
