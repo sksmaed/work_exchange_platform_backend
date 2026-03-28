@@ -1,8 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from ninja import Schema
+from ninja import Field, Schema
 from pydantic import model_validator
 
 
@@ -68,6 +68,15 @@ class HelperProfileUpdateSchema(Schema):
         return self
 
 
+class HelperPhotoResponseSchema(Schema):
+    """Schema for a single helper photo."""
+
+    id: UUID
+    image_url: str | None = None
+    order: int
+    created_at: datetime
+
+
 class HelperProfileResponseSchema(Schema):
     """Schema for the helper profile response."""
 
@@ -85,3 +94,11 @@ class HelperProfileResponseSchema(Schema):
     licenses: str
     languages: list[str]
     avg_rating: float
+    avatar_url: str | None = None
+    photos: list[HelperPhotoResponseSchema] = Field(default_factory=list)
+
+
+class HelperPhotoUploadResponseSchema(Schema):
+    """Schema for helper photo upload response."""
+
+    image_urls: list[str]
