@@ -60,3 +60,7 @@ work for exchange system backend in Django
     ```sh
     python manage.py createsuperuser
     ```
+
+## Production Deployment
+
+- See `docs/deployment_guide.md` for Docker-based server deployment and GitHub Actions auto deployment setup.

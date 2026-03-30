@@ -1,0 +1,71 @@
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/sksmaed/work_exchange_platform_backend:latest}
+    container_name: work_for_exchange_app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DISABLE_DOT_ENV: "True"
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      CACHES_LOCATION: redis://valkey:6379/0
+      CHANNEL_LAYERS_REDIS_LOCATION: redis://valkey:6379/1
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    volumes:
+      - static_data:/app/static
+      - media_data:/app/media
+    networks:
+      - work_for_exchange_network
+
+  db:
+    image: postgres:17.5
+    container_name: work_for_exchange_postgres
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DB}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - work_for_exchange_network
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: work_for_exchange_valkey
+    restart: unless-stopped
+    command: valkey-server --appendonly yes
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - work_for_exchange_network
+
+volumes:
+  postgres_data:
+  valkey_data:
+  static_data:
+  media_data:
+
+networks:
+  work_for_exchange_network:
+    driver: bridge

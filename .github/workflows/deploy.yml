@@ -1,0 +1,82 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_sha: ${{ steps.vars.outputs.image_sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image variables
+        id: vars
+        run: |
+          # 修正：強制轉為小寫，避免 Docker tag 報錯
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME=ghcr.io/$REPO_LOWER
+          IMAGE_SHA=${IMAGE_NAME}:sha-${{ github.sha }}
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "image_sha=${IMAGE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image_sha }}
+            ${{ steps.vars.outputs.image_name }}:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        # 修正：透過 envs 傳遞變數，避免特殊字元弄壞 bash 腳本
+        env:
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          envs: ENV_PRODUCTION 
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            # 安全地寫入 .env.production
+            echo "$ENV_PRODUCTION" > .env.production
+
+            export APP_IMAGE='${{ needs.build-and-push.outputs.image_sha }}'
+
+            echo '${{ secrets.GHCR_TOKEN }}' | docker login ghcr.io -u '${{ secrets.GHCR_USERNAME }}' --password-stdin
+            
+            # 修正：加上 --env-file .env.production
+            docker compose --env-file .env.production -f docker-compose.prod.yml pull app
+            docker compose --env-file .env.production -f docker-compose.prod.yml up -d --remove-orphans
+            
+            # 新增：執行 Django 資料庫遷移與靜態檔案收集 (請依你的專案實際指令微調)
+            docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app python manage.py migrate
+            docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app python manage.py collectstatic --noinput
+
+            docker image prune -f
