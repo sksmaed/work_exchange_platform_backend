@@ -34,3 +34,31 @@ if DEBUG:  # noqa: F405
     INTERNAL_IPS = ["127.0.0.1", "10.0.2.2"]
 
 CACHES["default"]["LOCATION"] = env("CACHES_URL", default="valkey://127.0.0.1:6379/0")  # noqa: F405
+
+
+# Use console email backend in development (no real SMTP needed)
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+MIDDLEWARE.insert(0, "common.debug_middleware.DebugExceptionMiddleware")  # noqa: F405
+
+# Show full tracebacks in development — override with Django's default handler
+LOGGING = {  # noqa: F405
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+    },
+}

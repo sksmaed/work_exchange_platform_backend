@@ -1,7 +1,11 @@
+from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer as BaseLoginSerializer
+from dj_rest_auth.serializers import UserDetailsSerializer
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound
+
+from features.core.models import User
 
 
 class LoginSerializer(BaseLoginSerializer):
@@ -17,3 +21,47 @@ class LoginSerializer(BaseLoginSerializer):
             if not user_model.objects.filter(email__iexact=email).exists():
                 raise NotFound(detail="USER_NOT_FOUND")
         return super().validate(attrs)
+
+
+class CustomUserDetailsSerializer(UserDetailsSerializer):
+    """Adds user_type to the user object returned in login/registration responses."""
+
+    user_type = serializers.CharField(read_only=True)
+
+    class Meta(UserDetailsSerializer.Meta):
+        fields = UserDetailsSerializer.Meta.fields + ("user_type",)
+
+
+class CustomRegisterSerializer(RegisterSerializer):
+    """Extends the default registration serializer to accept user_type."""
+
+    # username is auto-generated in AccountAdapter.save_user — not required from client
+    username = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_username(self, value):
+        # Skip allauth's username uniqueness check; adapter will generate a unique username
+        return value
+
+    def validate_email(self, email):
+        email = super().validate_email(email)
+        from features.core.models import User as UserModel
+        if UserModel.objects.filter(email__iexact=email).exists():
+            from rest_framework import serializers as drf_serializers
+            raise drf_serializers.ValidationError("此 Email 已被註冊，請直接登入或使用其他 Email。")
+        return email
+
+    user_type = serializers.ChoiceField(
+        choices=User.UserTypeChoices.choices,
+        default=User.UserTypeChoices.HELPER,
+    )
+
+    def get_cleaned_data(self):
+        data = super().get_cleaned_data()
+        data["user_type"] = self.validated_data.get("user_type", User.UserTypeChoices.HELPER)
+        return data
+
+    def save(self, request):
+        user = super().save(request)
+        user.user_type = self.cleaned_data.get("user_type", User.UserTypeChoices.HELPER)
+        user.save(update_fields=["user_type"])
+        return user

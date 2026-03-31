@@ -71,9 +71,11 @@ class HostResponseSchema(ModelSchema):
 class HostCreateSchema(Schema):
     """Schema for creating a new Host."""
 
-    description: str
-    address: str
-    type: str
+    name: str | None = ""
+    description: str | None = ""
+    address: str | None = ""
+    type: str | None = ""
+    phone_number: str | None = ""
     contact_information: str | None = ""
     pocket_money: int | None = 0
     meals_offered: str | None = ""
@@ -88,9 +90,11 @@ class HostCreateSchema(Schema):
 class HostUpdateSchema(Schema):
     """Schema for updating Host."""
 
+    name: str | None = None
     description: str | None = None
     type: str | None = None
     address: str | None = None
+    phone_number: str | None = None
     contact_information: str | None = None
     pocket_money: int | None = None
     meals_offered: str | None = None
@@ -100,6 +104,14 @@ class HostUpdateSchema(Schema):
     other: str | None = None
     expected_duration: str | None = None
     recruitment_slogan: str | None = None
+
+
+class HostBriefSchema(ModelSchema):
+    """Compact host schema for embedding in vacancy responses."""
+
+    class Meta:
+        model = Host
+        fields = ("id", "name", "address", "type", "avg_rating", "host_image")
 
 
 class VacancyAvailabilitySchema(ModelSchema):
@@ -114,6 +126,7 @@ class VacancyResponseSchema(ModelSchema):
     """Schema for Vacancy response."""
 
     availabilities: list[VacancyAvailabilitySchema] = Field(default_factory=list)
+    host: HostBriefSchema
 
     class Meta:
         model = Vacancy
@@ -126,7 +139,6 @@ class VacancyResponseSchema(ModelSchema):
 class VacancyCreateSchema(Schema):
     """Schema for creating a new Vacancy."""
 
-    host_id: str
     name: str
     work_time: str
     description: str

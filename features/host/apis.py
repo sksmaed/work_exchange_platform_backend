@@ -8,6 +8,7 @@ from ninja_extra.searching import Searching, searching
 
 from common.exceptions import Http403ForbiddenException, KeyNotFoundException
 from features.host.exceptions import HostNotFoundError, VacancyNotFoundError
+from ninja_extra.permissions import IsAuthenticated
 from features.host.models import Host, Vacancy, VacancyAvailability
 from features.host.schemas import (
     HostCreateSchema,
@@ -19,7 +20,7 @@ from features.host.schemas import (
 )
 
 
-@api_controller(prefix_or_class="hosts", tags=["hosts"])
+@api_controller(prefix_or_class="hosts", tags=["hosts"], permissions=[IsAuthenticated])
 class HostControllerAPI:
     """API endpoints for managing hosts."""
 
@@ -61,6 +62,7 @@ class HostControllerAPI:
             .annotate(exclude_children=Exists(exclude_children_subquery))
             .select_related("user")
             .prefetch_related("vacancy_set__availabilities")
+            .order_by("-created_at")
         )
 
     @route.post("", response=HostResponseSchema)
@@ -69,9 +71,11 @@ class HostControllerAPI:
         user = request.user
         host = Host(
             user=user,
-            description=data.description,
-            address=data.address,
-            type=data.type,
+            name=data.name or "",
+            description=data.description or "",
+            address=data.address or "",
+            type=data.type or "",
+            phone_number=data.phone_number or "",
             contact_information=data.contact_information or "",
             pocket_money=data.pocket_money or 0,
             meals_offered=data.meals_offered or "",
@@ -130,13 +134,13 @@ class HostControllerAPI:
 
         # Allow anyone to see vacancies of a host, or restrict to host owner depending on requirements.
         # Here we allow public read for vacancies of a valid host.
-        return Vacancy.objects.filter(host=host).order_by("-created_at")
+        return Vacancy.objects.filter(host=host).prefetch_related("availabilities").order_by("-created_at")
 
     @route.get("/vacancies/{vacancy_id}", response={200: VacancyResponseSchema})
     def get_vacancy(self, request: WSGIRequest, vacancy_id: str) -> Vacancy:  # noqa: ARG002
         """Retrieve details of a specific vacancy."""
         try:
-            return Vacancy.objects.select_related("host").get(id=vacancy_id)
+            return Vacancy.objects.select_related("host").prefetch_related("availabilities").get(id=vacancy_id)
         except Vacancy.DoesNotExist:
             raise KeyNotFoundException(VacancyNotFoundError, vacancy_id)
 
@@ -163,6 +167,9 @@ class HostControllerAPI:
             expected_gender=data.expected_gender,
             expected_licenses=data.expected_licenses,
             expected_personality=data.expected_personality,
+            expected_other_requirements=data.expected_other_requirements,
+            other_questions=data.other_questions,
+            status=data.status,
         )
         vacancy.save(user=user)
 
@@ -178,7 +185,7 @@ class HostControllerAPI:
                 updated_by_user=user,
             )
 
-        return vacancy
+        return Vacancy.objects.select_related("host").prefetch_related("availabilities").get(id=vacancy.id)
 
     @route.patch("/vacancies/{vacancy_id}", response=VacancyResponseSchema)
     def update_vacancy(self, request: WSGIRequest, vacancy_id: str, data: VacancyUpdateSchema) -> Vacancy:
@@ -261,4 +268,4 @@ class VacancyControllerAPI:
 
         filters &= Q(id__in=active_availabilities.values("vacancy_id"))
 
-        return Vacancy.objects.filter(filters).distinct().order_by("-created_at")
+        return Vacancy.objects.filter(filters).distinct().order_by("-created_at").select_related("host")

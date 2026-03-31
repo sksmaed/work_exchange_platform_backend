@@ -1,9 +1,27 @@
+from django.contrib.auth import get_user_model
 from django.core.handlers.wsgi import WSGIRequest
 from django.http import JsonResponse
 from ninja.openapi.docs import Redoc
+from ninja.security import HttpBearer
 from ninja_extra import NinjaExtraAPI
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 from common.exceptions import BaseAPIException
+
+
+class APIJWTAuth(HttpBearer):
+    """Authenticate requests using simplejwt Bearer tokens."""
+
+    def authenticate(self, request: WSGIRequest, token: str):
+        jwt_auth = JWTAuthentication()
+        try:
+            validated_token = jwt_auth.get_validated_token(token)
+            user = jwt_auth.get_user(validated_token)
+            request.user = user
+            return user
+        except (InvalidToken, TokenError):
+            return None
 from features.album.apis import AlbumControllerAPI
 from features.application.apis import ApplicationControllerAPI
 from features.calendar.apis import CalendarControllerAPI
@@ -20,6 +38,7 @@ api = NinjaExtraAPI(
     app_name="work_exchange_platform",
     docs=Redoc(),
     docs_url="docs/",
+    auth=APIJWTAuth(),
 )
 
 
