@@ -253,8 +253,7 @@ SIMPLE_JWT = {
 # dj-rest-auth settings
 REST_AUTH = {
     "USE_JWT": True,
-    "JWT_AUTH_COOKIE": "access_token",
-    "JWT_AUTH_REFRESH_COOKIE": "refresh_token",
+    "JWT_AUTH_HTTPONLY": False,  # Return tokens in JSON body, not HttpOnly cookies
     "LOGIN_SERIALIZER": "features.core.serializers.LoginSerializer",
     "USER_DETAILS_SERIALIZER": "features.core.serializers.CustomUserDetailsSerializer",
     "REGISTER_SERIALIZER": "features.core.serializers.CustomRegisterSerializer",
