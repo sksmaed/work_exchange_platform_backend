@@ -148,6 +148,14 @@ class HostControllerAPI:
         host.save(user=user)
         return host
 
+    @route.get("/{host_id}", response={200: HostResponseSchema})
+    def get_host(self, request: WSGIRequest, host_id: str) -> Host:  # noqa: ARG002
+        """Retrieve a single host by ID."""
+        try:
+            return Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
     @route.patch("/{host_id}", response=HostResponseSchema)
     def update_host(self, request: WSGIRequest, host_id: str, data: HostUpdateSchema) -> Host:
         """Update an existing host entry."""

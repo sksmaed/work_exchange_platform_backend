@@ -113,7 +113,7 @@ class HostBriefSchema(ModelSchema):
 
     class Meta:
         model = Host
-        fields = ("id", "name", "address", "type", "avg_rating", "host_image")
+        fields = ("id", "user", "name", "address", "type", "avg_rating", "host_image")
 
 
 class VacancyAvailabilitySchema(ModelSchema):
