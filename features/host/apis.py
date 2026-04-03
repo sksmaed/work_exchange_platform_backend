@@ -1,4 +1,9 @@
+import base64
+import re
+
+from django.core.files.base import ContentFile
 from django.core.handlers.wsgi import WSGIRequest
+from django.db import transaction
 from django.db.models import Exists, F, OuterRef, Q, QuerySet
 from ninja_extra import api_controller, route
 from ninja_extra.ordering import Ordering, ordering
@@ -6,18 +11,72 @@ from ninja_extra.pagination import PageNumberPagination, paginate
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 from ninja_extra.searching import Searching, searching
 
-from common.exceptions import Http403ForbiddenException, KeyNotFoundException
+from common.exceptions import ErrorCode, ErrorDetail, Http400BadRequestException, Http403ForbiddenException, KeyNotFoundException
 from features.host.exceptions import HostNotFoundError, VacancyNotFoundError
-from ninja_extra.permissions import IsAuthenticated
-from features.host.models import Host, Vacancy, VacancyAvailability
+from ninja_extra.permissions import AllowAny, IsAuthenticated
+from features.host.models import Host, HostReview, HostReviewImage, Vacancy, VacancyAvailability
 from features.host.schemas import (
     HostCreateSchema,
     HostResponseSchema,
+    HostReviewCreateSchema,
+    HostReviewResponseSchema,
+    HostReviewSummarySchema,
     HostUpdateSchema,
     VacancyCreateSchema,
     VacancyResponseSchema,
     VacancyUpdateSchema,
 )
+
+_MAX_REVIEW_IMAGE_BYTES = 2 * 1024 * 1024
+_DATA_URL_RE = re.compile(
+    r"^data:image/(jpeg|jpg|png|gif|webp);base64,(.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _replace_review_images_from_data_urls(review: HostReview, photos: list[str], user) -> None:
+    """Replace review images with decoded data URLs from the client (ReviewModal)."""
+    review.images.all().delete()
+    for i, data_url in enumerate(photos):
+        m = _DATA_URL_RE.match(data_url.strip())
+        if not m:
+            raise Http400BadRequestException(
+                [
+                    ErrorDetail(
+                        ErrorCode("host", "invalid_review_photo"),
+                        {"message": "Each photo must be data:image/jpeg|png|gif|webp;base64,..."},
+                    )
+                ]
+            )
+        ext = m.group(1).lower()
+        b64 = m.group(2)
+        if ext == "jpg":
+            ext = "jpeg"
+        try:
+            raw = base64.b64decode(b64, validate=True)
+        except (ValueError, TypeError):
+            raise Http400BadRequestException(
+                [
+                    ErrorDetail(
+                        ErrorCode("host", "invalid_review_photo"),
+                        {"message": "Invalid base64 image data"},
+                    )
+                ]
+            )
+        if len(raw) > _MAX_REVIEW_IMAGE_BYTES:
+            raise Http400BadRequestException(
+                [
+                    ErrorDetail(
+                        ErrorCode("host", "invalid_review_photo"),
+                        {"message": f"Each image must be at most {_MAX_REVIEW_IMAGE_BYTES // (1024 * 1024)}MB"},
+                    )
+                ]
+            )
+        suffix = ".jpg" if ext == "jpeg" else f".{ext}"
+        name = f"review_{i}{suffix}"
+        hi = HostReviewImage(review=review)
+        hi.image.save(name, ContentFile(raw), save=False)
+        hi.save(user=user)
 
 
 @api_controller(prefix_or_class="hosts", tags=["hosts"], permissions=[IsAuthenticated])
@@ -237,6 +296,106 @@ class HostControllerAPI:
 
         vacancy.delete()
         return {"detail": "Vacancy deleted successfully"}
+
+    # ---- Reviews ----
+
+    @route.get(
+        "/{host_id}/reviews",
+        response={200: HostReviewSummarySchema},
+        auth=None,
+        permissions=[AllowAny],
+    )
+    def list_reviews(self, request: WSGIRequest, host_id: str) -> dict:  # noqa: ARG002
+        """List all reviews for a host and return a summary."""
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        review_list = list(
+            HostReview.objects.filter(host=host)
+            .select_related("reviewer")
+            .prefetch_related("images")
+            .order_by("-created_at")
+        )
+        total = len(review_list)
+        avg = sum(r.rating for r in review_list) / total if total else 0.0
+        distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        for r in review_list:
+            distribution[r.rating] += 1
+
+        # Return a plain dict so ninja serialises ORM objects via HostReviewSummarySchema.
+        # Passing pre-built schema instances would cause resolvers to receive schema
+        # objects instead of ORM objects, silently returning default values.
+        return {
+            "average_rating": round(avg, 2),
+            "total_reviews": total,
+            "distribution": distribution,
+            "reviews": review_list,
+        }
+
+    @route.post("/{host_id}/reviews", response={201: HostReviewResponseSchema})
+    def create_review(self, request: WSGIRequest, host_id: str, data: HostReviewCreateSchema) -> HostReview:
+        """Submit a review for a host (one per user)."""
+        user = request.user
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        if host.user == user:
+            raise Http403ForbiddenException("You cannot review your own host profile")
+
+        with transaction.atomic():
+            review, created = HostReview.objects.get_or_create(
+                host=host,
+                reviewer=user,
+                defaults={"rating": data.rating, "comment": data.comment},
+            )
+            if not created:
+                review.rating = data.rating
+                review.comment = data.comment
+                review.save(user=user)
+
+            _replace_review_images_from_data_urls(review, data.photos, user)
+
+            self._refresh_avg_rating(host)
+
+        return (
+            HostReview.objects.select_related("reviewer")
+            .prefetch_related("images")
+            .get(pk=review.pk)
+        )
+
+    @route.delete("/{host_id}/reviews/{review_id}")
+    def delete_review(self, request: WSGIRequest, host_id: str, review_id: str) -> dict:
+        """Delete the authenticated user's review for a host."""
+        user = request.user
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        review = HostReview.objects.filter(id=review_id, host=host).first()
+        if not review:
+            from ninja import errors  # noqa: PLC0415
+            raise KeyNotFoundException(HostNotFoundError, review_id)
+
+        if review.reviewer != user:
+            raise Http403ForbiddenException("You can only delete your own review")
+
+        review.delete()
+        self._refresh_avg_rating(host)
+        return {"detail": "Review deleted"}
+
+    @staticmethod
+    def _refresh_avg_rating(host: Host) -> None:
+        """Recalculate and persist host.avg_rating from all reviews."""
+        from django.db.models import Avg  # noqa: PLC0415
+
+        result = HostReview.objects.filter(host=host).aggregate(avg=Avg("rating"))
+        host.avg_rating = result["avg"] or 0.0
+        host.save(update_fields=["avg_rating"])
 
 
 @api_controller(prefix_or_class="vacancies", tags=["vacancies"])

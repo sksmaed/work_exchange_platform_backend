@@ -1,7 +1,11 @@
+from typing import ClassVar
+
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from common.models import BaseModel
+from utils.storage import get_model_file_path
 
 
 class Host(BaseModel):
@@ -126,6 +130,62 @@ class Host(BaseModel):
         default=0.0,
         blank=True,
     )
+
+
+class HostReview(BaseModel):
+    """A star-rating + text review left by a helper (or any user) for a host.
+
+    Attributes:
+    ----------
+    host : ForeignKey
+        The host being reviewed.
+    reviewer : ForeignKey
+        The user who wrote the review.
+    rating : IntegerField
+        Integer rating 1–5.
+    comment : TextField
+        Optional text comment.
+    """
+
+    host = models.ForeignKey(
+        "host.Host",
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+    reviewer = models.ForeignKey(
+        "core.User",
+        on_delete=models.CASCADE,
+        related_name="host_reviews",
+    )
+    rating = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    comment = models.TextField(blank=True, default="")
+
+    class Meta:
+        unique_together = [("host", "reviewer")]
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return f"{self.reviewer} → {self.host} ({self.rating}★)"
+
+
+class HostReviewImage(BaseModel):
+    """Image attachment for a host review."""
+
+    review = models.ForeignKey(
+        "host.HostReview",
+        on_delete=models.CASCADE,
+        related_name="images",
+    )
+    image = models.ImageField(upload_to=get_model_file_path)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["created_at"]
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return f"Image for review {self.review_id}"
 
 
 class Vacancy(BaseModel):
