@@ -1,11 +1,13 @@
 from importlib import import_module
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
+import requests
 from allauth.socialaccount.providers.apple.views import AppleOAuth2Adapter
 from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.handlers.wsgi import WSGIRequest
 from ninja import Router
@@ -15,6 +17,8 @@ from ninja_extra.controllers.route import Route
 from pydantic import BaseModel
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
+
+from features.core.serializers import CustomSocialLoginSerializer
 
 # Note: Authentication is now handled by allauth.headless at /api/auth/
 # This file includes social authentication endpoints and future business logic
@@ -26,10 +30,18 @@ class FacebookLoginRequestSchema(BaseModel):
     """Schema for Facebook login request."""
 
     access_token: str
+    user_type: Literal["helper", "host", "both"] = "helper"
 
 
 class GoogleLoginRequestSchema(BaseModel):
     """Schema for Google login request."""
+
+    access_token: str
+    user_type: Literal["helper", "host", "both"] = "helper"
+
+
+class GoogleLookupRequestSchema(BaseModel):
+    """Validate Google access token and check whether the email is already registered."""
 
     access_token: str
 
@@ -38,24 +50,28 @@ class AppleLoginRequestSchema(BaseModel):
     """Schema for Apple login request."""
 
     id_token: str
+    user_type: Literal["helper", "host", "both"] = "helper"
 
 
 class FacebookLoginView(SocialLoginView):
     """Facebook OAuth2 login view."""
 
     adapter_class = FacebookOAuth2Adapter
+    serializer_class = CustomSocialLoginSerializer
 
 
 class GoogleLoginView(SocialLoginView):
     """Google OAuth2 login view."""
 
     adapter_class = GoogleOAuth2Adapter
+    serializer_class = CustomSocialLoginSerializer
 
 
 class AppleLoginView(SocialLoginView):
     """Apple OAuth2 login view."""
 
     adapter_class = AppleOAuth2Adapter
+    serializer_class = CustomSocialLoginSerializer
 
 
 @api_controller("/social-auth", tags=["Social Authentication"], auth=None)
@@ -130,7 +146,11 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            response = self._call_social_login_view(request, FacebookLoginView, {"access_token": data.access_token})
+            response = self._call_social_login_view(
+                request,
+                FacebookLoginView,
+                {"access_token": data.access_token, "user_type": data.user_type},
+            )
             return self._build_api_response(response)
         except Exception as e:
             return self.STATUS_INTERNAL_ERROR, {
@@ -138,6 +158,28 @@ class SocialAuthController(ControllerBase):
                 "exception_type": type(e).__name__,
                 "message": str(e) or repr(e),
             }
+
+    @Route.post("/google/lookup/", url_name="google_lookup", response={200: dict})
+    def google_lookup(self, _request: WSGIRequest, data: GoogleLookupRequestSchema) -> dict[str, Any]:
+        """Check if the Google account email already has a local user (no user is created)."""
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {data.access_token}"},
+                timeout=10,
+            )
+            if resp.status_code != self.STATUS_OK:
+                return {"error": "invalid_token", "message": "無法驗證 Google 帳號"}
+            info = resp.json()
+            email = info.get("email")
+            if not email:
+                return {"error": "no_email", "message": "無法取得 Google 信箱"}
+            user_model = get_user_model()
+            exists = user_model.objects.filter(email__iexact=email).exists()
+        except Exception as e:
+            return {"error": "google_lookup_error", "message": str(e)}
+        else:
+            return {"exists": exists, "email": email}
 
     @Route.post("/google/", url_name="google_login", response={200: dict, 400: dict, 401: dict, 500: dict})
     def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
@@ -153,7 +195,11 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            response = self._call_social_login_view(request, GoogleLoginView, {"access_token": data.access_token})
+            response = self._call_social_login_view(
+                request,
+                GoogleLoginView,
+                {"access_token": data.access_token, "user_type": data.user_type},
+            )
             return self._build_api_response(response)
         except Exception as e:
             return self.STATUS_INTERNAL_ERROR, {
@@ -176,7 +222,11 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            response = self._call_social_login_view(request, AppleLoginView, {"id_token": data.id_token})
+            response = self._call_social_login_view(
+                request,
+                AppleLoginView,
+                {"id_token": data.id_token, "user_type": data.user_type},
+            )
             return self._build_api_response(response)
         except Exception as e:
             return self.STATUS_INTERNAL_ERROR, {

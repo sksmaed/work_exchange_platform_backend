@@ -1,4 +1,4 @@
-from dj_rest_auth.registration.serializers import RegisterSerializer
+from dj_rest_auth.registration.serializers import RegisterSerializer, SocialLoginSerializer
 from dj_rest_auth.serializers import LoginSerializer as BaseLoginSerializer
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.contrib.auth import get_user_model
@@ -30,6 +30,21 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
 
     class Meta(UserDetailsSerializer.Meta):
         fields = UserDetailsSerializer.Meta.fields + ("user_type",)
+
+
+class CustomSocialLoginSerializer(SocialLoginSerializer):
+    """Social login with optional user_type (first-time signup only; applied in SocialAccountAdapter)."""
+
+    user_type = serializers.ChoiceField(
+        choices=User.UserTypeChoices.choices,
+        default=User.UserTypeChoices.HELPER,
+        required=False,
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        req = self._get_request()
+        setattr(req, "_social_signup_user_type", attrs.get("user_type", User.UserTypeChoices.HELPER))
+        return super().validate(attrs)
 
 
 class CustomRegisterSerializer(RegisterSerializer):

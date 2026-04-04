@@ -45,7 +45,11 @@ class HelperModel(BaseModel):
         on_delete=models.CASCADE,
     )
     description = models.TextField()
-    birthday = models.DateField()
+    birthday = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Unset until the user completes their profile (e.g. social signup).",
+    )
 
     class GenderChoices(models.TextChoices):
         MALE = "M", "Male"

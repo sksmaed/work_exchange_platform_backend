@@ -83,7 +83,7 @@ class HelperProfileResponseSchema(Schema):
     id: UUID
     user_id: UUID | None = None
     description: str
-    birthday: date
+    birthday: date | None = None
     gender: str | None = None
     residence: str
     expected_place: list[str]

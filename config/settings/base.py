@@ -197,6 +197,7 @@ ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
+SOCIALACCOUNT_ADAPTER = "config.social_adapter.SocialAccountAdapter"
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 
 # Social OAuth credentials (optional). If set, allauth can work without DB SocialApp records.

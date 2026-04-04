@@ -3,8 +3,6 @@ import traceback
 from allauth.account.signals import user_signed_up
 from django.db import transaction
 from django.dispatch import receiver
-from django.utils import timezone
-
 from features.core.models import User
 from features.helper.models import HelperModel
 from features.host.models import Host
@@ -20,7 +18,7 @@ def create_user_profiles(sender, request, user: User, **kwargs: object) -> None:
                     user=user,
                     user_id=user.id,
                     description="",
-                    birthday=timezone.now().date(),
+                    birthday=None,
                     residence="",
                     expected_place=[],
                     expected_time_periods=[],
