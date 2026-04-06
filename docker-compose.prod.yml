@@ -7,12 +7,12 @@ services:
       - .env.production
     environment:
       DISABLE_DOT_ENV: "True"
-      DATABASE_HOST: db
-      DATABASE_PORT: "5432"
-      CACHES_LOCATION: redis://valkey:6379/0
-      CHANNEL_LAYERS_REDIS_LOCATION: redis://valkey:6379/1
+      DATABASE_HOST: ${DATABASE_HOST:-db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      CACHES_LOCATION: ${CACHES_LOCATION:-redis://valkey:6379/0}
+      CHANNEL_LAYERS_REDIS_LOCATION: ${CHANNEL_LAYERS_REDIS_LOCATION:-redis://valkey:6379/1}
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       db:
         condition: service_healthy

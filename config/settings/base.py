@@ -137,22 +137,31 @@ ASGI_APPLICATION = "config.asgi.application"
 
 # Database
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "HOST": env("DATABASE_HOST"),
-        "PORT": env("DATABASE_PORT"),
-        "NAME": env("DATABASE_DB"),
-    },
-}
-DATABASES["default"]["USER"] = env("DATABASE_USER")
-DATABASES["default"]["PASSWORD"] = env("DATABASE_PASSWORD")
+if env("DATABASE_URL", default=None):
+    DATABASES = {
+        "default": env.db("DATABASE_URL"),
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "HOST": env("DATABASE_HOST", default=os.environ.get("PGHOST", "localhost")),
+            "PORT": env("DATABASE_PORT", default=os.environ.get("PGPORT", "5432")),
+            "NAME": env("DATABASE_DB", default=os.environ.get("PGDATABASE", "postgres")),
+            "USER": env("DATABASE_USER", default=os.environ.get("PGUSER", "postgres")),
+            "PASSWORD": env("DATABASE_PASSWORD", default=os.environ.get("PGPASSWORD", "")),
+        },
+    }
 
 # Cache
+REDIS_HOST = env("REDIS_HOST", default="localhost")
+REDIS_PORT = env("REDIS_PORT", default="6379")
+REDIS_DB = env("REDIS_DB", default="0")
+
 CACHES = {
     "default": {
         "BACKEND": env("CACHES_BACKEND", default="django_valkey.cache.ValkeyCache"),
-        "LOCATION": env("CACHES_LOCATION", default="redis://localhost:6379/0"),
+        "LOCATION": env("CACHES_LOCATION", default=f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"),
     },
 }
 
@@ -161,7 +170,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [env("CHANNEL_LAYERS_REDIS_LOCATION", default="redis://localhost:6379/1")],
+            "hosts": [env("CHANNEL_LAYERS_REDIS_LOCATION", default=f"redis://{REDIS_HOST}:{REDIS_PORT}/1")],
         },
     },
 }
@@ -273,9 +282,12 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Cors
-CORS_ALLOWED_ORIGINS = []
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_URLS_REGEX = r"^/api/.*$"
 CORS_ALLOW_CREDENTIALS = True
+
+# Email
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 
 # Admin
 ADMIN_URL = "admin/"
