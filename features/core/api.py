@@ -160,7 +160,7 @@ class SocialAuthController(ControllerBase):
             }
 
     @Route.post("/google/lookup/", url_name="google_lookup", response={200: dict})
-    def google_lookup(self, _request: WSGIRequest, data: GoogleLookupRequestSchema) -> dict[str, Any]:
+    def google_lookup(self, request: WSGIRequest, data: GoogleLookupRequestSchema) -> dict[str, Any]:  # noqa: ARG002
         """Check if the Google account email already has a local user (no user is created)."""
         try:
             resp = requests.get(
