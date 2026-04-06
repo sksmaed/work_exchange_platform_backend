@@ -57,7 +57,7 @@ class AppleLoginView(SocialLoginView):
     adapter_class = AppleOAuth2Adapter
 
 
-@api_controller("/social-auth", tags=["Social Authentication"])
+@api_controller("/social-auth", tags=["Social Authentication"], auth=None)
 class SocialAuthController(ControllerBase):
     """Social authentication controller for Google, Facebook, and Apple login."""
 
