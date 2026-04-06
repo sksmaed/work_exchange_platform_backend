@@ -1,9 +1,12 @@
+from importlib import import_module
 from typing import Any, ClassVar
 
 from allauth.socialaccount.providers.apple.views import AppleOAuth2Adapter
 from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
+from django.conf import settings
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.handlers.wsgi import WSGIRequest
 from ninja import Router
 from ninja_extra import api_controller
@@ -86,6 +89,14 @@ class SocialAuthController(ControllerBase):
 
         if hasattr(incoming_request, "session"):
             request.session = incoming_request.session
+        else:
+            session_engine = import_module(settings.SESSION_ENGINE)
+            request.session = session_engine.SessionStore()
+
+        # allauth may use django messages framework during login flow.
+        # APIRequestFactory request does not include message storage by default.
+        setattr(request, "_messages", FallbackStorage(request))
+
         request.user = getattr(incoming_request, "user", None)
 
         view = view_cls.as_view()
