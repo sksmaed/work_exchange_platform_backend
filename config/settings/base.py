@@ -199,6 +199,12 @@ ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandator
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 
+# Social OAuth credentials (optional). If set, allauth can work without DB SocialApp records.
+GOOGLE_OAUTH2_CLIENT_ID = env("GOOGLE_OAUTH2_CLIENT_ID", default="")
+GOOGLE_OAUTH2_CLIENT_SECRET = env("GOOGLE_OAUTH2_CLIENT_SECRET", default="")
+FACEBOOK_APP_ID = env("FACEBOOK_APP_ID", default="")
+FACEBOOK_APP_SECRET = env("FACEBOOK_APP_SECRET", default="")
+
 # Social account settings for Google and Facebook login
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
@@ -209,6 +215,17 @@ SOCIALACCOUNT_PROVIDERS = {
         "AUTH_PARAMS": {
             "access_type": "online",
         },
+        **(
+            {
+                "APP": {
+                    "client_id": GOOGLE_OAUTH2_CLIENT_ID,
+                    "secret": GOOGLE_OAUTH2_CLIENT_SECRET,
+                    "key": "",
+                }
+            }
+            if GOOGLE_OAUTH2_CLIENT_ID and GOOGLE_OAUTH2_CLIENT_SECRET
+            else {}
+        ),
     },
     "facebook": {
         "METHOD": "oauth2",
@@ -231,6 +248,17 @@ SOCIALACCOUNT_PROVIDERS = {
         "LOCALE_FUNC": lambda _: "en_US",
         "VERIFIED_EMAIL": False,
         "VERSION": "v20.0",
+        **(
+            {
+                "APP": {
+                    "client_id": FACEBOOK_APP_ID,
+                    "secret": FACEBOOK_APP_SECRET,
+                    "key": "",
+                }
+            }
+            if FACEBOOK_APP_ID and FACEBOOK_APP_SECRET
+            else {}
+        ),
     },
     "apple": {
         "SCOPE": ["email", "name"],
