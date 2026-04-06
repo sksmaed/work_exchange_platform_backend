@@ -198,6 +198,8 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
 SOCIALACCOUNT_ADAPTER = "config.social_adapter.SocialAccountAdapter"
+# 僅在「依信箱比對到既有使用者」時，把本次第三方帳號寫入 SocialAccount（見 Google 的 EMAIL_AUTHENTICATION）
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 
 # Social OAuth credentials (optional). If set, allauth can work without DB SocialApp records.
@@ -209,6 +211,8 @@ FACEBOOK_APP_SECRET = env("FACEBOOK_APP_SECRET", default="")
 # Social account settings for Google and Facebook login
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
+        # Google 回傳的 email 已由 Google 驗證：允許與本地既有同信箱帳號視為同一人並完成登入（避免「email 已註冊」）
+        "EMAIL_AUTHENTICATION": True,
         "SCOPE": [
             "profile",
             "email",
