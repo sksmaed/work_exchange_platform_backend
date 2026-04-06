@@ -10,6 +10,7 @@ from ninja_extra import api_controller
 from ninja_extra.controllers import ControllerBase
 from ninja_extra.controllers.route import Route
 from pydantic import BaseModel
+from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
 # Note: Authentication is now handled by allauth.headless at /api/auth/
@@ -61,15 +62,34 @@ class AppleLoginView(SocialLoginView):
 class SocialAuthController(ControllerBase):
     """Social authentication controller for Google, Facebook, and Apple login."""
 
-    def _call_social_login_view(self, view_cls: type[SocialLoginView], payload: dict[str, str]) -> any:
+    def _call_social_login_view(
+        self,
+        incoming_request: WSGIRequest,
+        view_cls: type[SocialLoginView],
+        payload: dict[str, str],
+    ) -> Response:
         """Call a dj-rest-auth social login view with a DRF-compatible request."""
         factory = APIRequestFactory()
-        request = factory.post("/", payload, format="json")
+        request = factory.post(
+            incoming_request.path,
+            payload,
+            format="json",
+            HTTP_HOST=incoming_request.get_host(),
+        )
+
+        request.META["wsgi.url_scheme"] = incoming_request.scheme
+        if "HTTP_X_FORWARDED_PROTO" in incoming_request.META:
+            request.META["HTTP_X_FORWARDED_PROTO"] = incoming_request.META["HTTP_X_FORWARDED_PROTO"]
+
+        if hasattr(incoming_request, "session"):
+            request.session = incoming_request.session
+        request.user = getattr(incoming_request, "user", None)
+
         view = view_cls.as_view()
         return view(request)
 
     @Route.post("/facebook/", url_name="facebook_login")
-    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> dict[str, Any]:  # noqa: ARG002
+    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> tuple[int, dict[str, Any]]:
         """Facebook OAuth2 Login.
 
         Exchange Facebook access token for JWT tokens.
@@ -82,17 +102,17 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            response = self._call_social_login_view(FacebookLoginView, {"access_token": data.access_token})
-
-            if response.status_code == HTTP_OK:
-                return response.data
+            response = self._call_social_login_view(request, FacebookLoginView, {"access_token": data.access_token})
+            return response.status_code, dict(response.data)
         except Exception as e:
-            return {"error": "Facebook login error", "message": str(e)}
-        else:
-            return {"error": "Facebook login failed", "details": response.data}
+            return 500, {
+                "error": "Facebook login error",
+                "exception_type": type(e).__name__,
+                "message": str(e) or repr(e),
+            }
 
     @Route.post("/google/", url_name="google_login")
-    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> dict[str, Any]:  # noqa: ARG002
+    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
         """Google OAuth2 Login.
 
         Exchange Google access token for JWT tokens.
@@ -105,17 +125,17 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            response = self._call_social_login_view(GoogleLoginView, {"access_token": data.access_token})
-
-            if response.status_code == HTTP_OK:
-                return response.data
+            response = self._call_social_login_view(request, GoogleLoginView, {"access_token": data.access_token})
+            return response.status_code, dict(response.data)
         except Exception as e:
-            return {"error": "Google login error", "message": str(e)}
-        else:
-            return {"error": "Google login failed", "details": response.data}
+            return 500, {
+                "error": "Google login error",
+                "exception_type": type(e).__name__,
+                "message": str(e) or repr(e),
+            }
 
     @Route.post("/apple/", url_name="apple_login")
-    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> dict[str, Any]:  # noqa: ARG002
+    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
         """Apple Sign In OAuth2 Login.
 
         Exchange Apple identity token (id_token) for JWT tokens.
@@ -128,11 +148,11 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            response = self._call_social_login_view(AppleLoginView, {"id_token": data.id_token})
-
-            if response.status_code == HTTP_OK:
-                return response.data
+            response = self._call_social_login_view(request, AppleLoginView, {"id_token": data.id_token})
+            return response.status_code, dict(response.data)
         except Exception as e:
-            return {"error": "Apple login error", "message": str(e)}
-        else:
-            return {"error": "Apple login failed", "details": response.data}
+            return 500, {
+                "error": "Apple login error",
+                "exception_type": type(e).__name__,
+                "message": str(e) or repr(e),
+            }
