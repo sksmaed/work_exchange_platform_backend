@@ -1,10 +1,9 @@
-from typing import Any
-
 from allauth.socialaccount.providers.apple.views import AppleOAuth2Adapter
 from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 from django.core.handlers.wsgi import WSGIRequest
+from django.http import JsonResponse
 from ninja import Router
 from ninja_extra import api_controller
 from ninja_extra.controllers import ControllerBase
@@ -17,9 +16,6 @@ from rest_framework.test import APIRequestFactory
 # This file includes social authentication endpoints and future business logic
 
 router = Router()
-
-# HTTP status code constants
-HTTP_OK = 200
 
 
 class FacebookLoginRequestSchema(BaseModel):
@@ -89,7 +85,7 @@ class SocialAuthController(ControllerBase):
         return view(request)
 
     @Route.post("/facebook/", url_name="facebook_login")
-    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> tuple[int, dict[str, Any]]:
+    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> JsonResponse:
         """Facebook OAuth2 Login.
 
         Exchange Facebook access token for JWT tokens.
@@ -103,16 +99,20 @@ class SocialAuthController(ControllerBase):
         """
         try:
             response = self._call_social_login_view(request, FacebookLoginView, {"access_token": data.access_token})
-            return response.status_code, dict(response.data)
+            payload = response.data if isinstance(response.data, dict) else {"data": response.data}
+            return JsonResponse(payload, status=response.status_code)
         except Exception as e:
-            return 500, {
-                "error": "Facebook login error",
-                "exception_type": type(e).__name__,
-                "message": str(e) or repr(e),
-            }
+            return JsonResponse(
+                {
+                    "error": "Facebook login error",
+                    "exception_type": type(e).__name__,
+                    "message": str(e) or repr(e),
+                },
+                status=500,
+            )
 
     @Route.post("/google/", url_name="google_login")
-    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
+    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> JsonResponse:
         """Google OAuth2 Login.
 
         Exchange Google access token for JWT tokens.
@@ -126,16 +126,20 @@ class SocialAuthController(ControllerBase):
         """
         try:
             response = self._call_social_login_view(request, GoogleLoginView, {"access_token": data.access_token})
-            return response.status_code, dict(response.data)
+            payload = response.data if isinstance(response.data, dict) else {"data": response.data}
+            return JsonResponse(payload, status=response.status_code)
         except Exception as e:
-            return 500, {
-                "error": "Google login error",
-                "exception_type": type(e).__name__,
-                "message": str(e) or repr(e),
-            }
+            return JsonResponse(
+                {
+                    "error": "Google login error",
+                    "exception_type": type(e).__name__,
+                    "message": str(e) or repr(e),
+                },
+                status=500,
+            )
 
     @Route.post("/apple/", url_name="apple_login")
-    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
+    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> JsonResponse:
         """Apple Sign In OAuth2 Login.
 
         Exchange Apple identity token (id_token) for JWT tokens.
@@ -149,10 +153,14 @@ class SocialAuthController(ControllerBase):
         """
         try:
             response = self._call_social_login_view(request, AppleLoginView, {"id_token": data.id_token})
-            return response.status_code, dict(response.data)
+            payload = response.data if isinstance(response.data, dict) else {"data": response.data}
+            return JsonResponse(payload, status=response.status_code)
         except Exception as e:
-            return 500, {
-                "error": "Apple login error",
-                "exception_type": type(e).__name__,
-                "message": str(e) or repr(e),
-            }
+            return JsonResponse(
+                {
+                    "error": "Apple login error",
+                    "exception_type": type(e).__name__,
+                    "message": str(e) or repr(e),
+                },
+                status=500,
+            )
