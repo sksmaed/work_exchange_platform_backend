@@ -5,12 +5,12 @@ from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 from django.core.handlers.wsgi import WSGIRequest
-from django.http import HttpRequest
 from ninja import Router
 from ninja_extra import api_controller
 from ninja_extra.controllers import ControllerBase
 from ninja_extra.controllers.route import Route
 from pydantic import BaseModel
+from rest_framework.test import APIRequestFactory
 
 # Note: Authentication is now handled by allauth.headless at /api/auth/
 # This file includes social authentication endpoints and future business logic
@@ -61,8 +61,15 @@ class AppleLoginView(SocialLoginView):
 class SocialAuthController(ControllerBase):
     """Social authentication controller for Google, Facebook, and Apple login."""
 
+    def _call_social_login_view(self, view_cls: type[SocialLoginView], payload: dict[str, str]) -> any:
+        """Call a dj-rest-auth social login view with a DRF-compatible request."""
+        factory = APIRequestFactory()
+        request = factory.post("/", payload, format="json")
+        view = view_cls.as_view()
+        return view(request)
+
     @Route.post("/facebook/", url_name="facebook_login")
-    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> dict[str, Any]:
+    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> dict[str, Any]:  # noqa: ARG002
         """Facebook OAuth2 Login.
 
         Exchange Facebook access token for JWT tokens.
@@ -75,15 +82,7 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            view = FacebookLoginView()
-            view.request = request
-
-            # Create a mock request with the access token data
-            mock_request = HttpRequest()
-            mock_request.method = "POST"
-            mock_request.POST = {"access_token": data.access_token}
-
-            response = view.post(mock_request)
+            response = self._call_social_login_view(FacebookLoginView, {"access_token": data.access_token})
 
             if response.status_code == HTTP_OK:
                 return response.data
@@ -93,7 +92,7 @@ class SocialAuthController(ControllerBase):
             return {"error": "Facebook login failed", "details": response.data}
 
     @Route.post("/google/", url_name="google_login")
-    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> dict[str, Any]:
+    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> dict[str, Any]:  # noqa: ARG002
         """Google OAuth2 Login.
 
         Exchange Google access token for JWT tokens.
@@ -106,15 +105,7 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            view = GoogleLoginView()
-            view.request = request
-
-            # Create a mock request with the access token data
-            mock_request = HttpRequest()
-            mock_request.method = "POST"
-            mock_request.POST = {"access_token": data.access_token}
-
-            response = view.post(mock_request)
+            response = self._call_social_login_view(GoogleLoginView, {"access_token": data.access_token})
 
             if response.status_code == HTTP_OK:
                 return response.data
@@ -124,7 +115,7 @@ class SocialAuthController(ControllerBase):
             return {"error": "Google login failed", "details": response.data}
 
     @Route.post("/apple/", url_name="apple_login")
-    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> dict[str, Any]:
+    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> dict[str, Any]:  # noqa: ARG002
         """Apple Sign In OAuth2 Login.
 
         Exchange Apple identity token (id_token) for JWT tokens.
@@ -137,15 +128,7 @@ class SocialAuthController(ControllerBase):
             JWT tokens and user information
         """
         try:
-            view = AppleLoginView()
-            view.request = request
-
-            # Create a mock request with the identity token
-            mock_request = HttpRequest()
-            mock_request.method = "POST"
-            mock_request.POST = {"id_token": data.id_token}
-
-            response = view.post(mock_request)
+            response = self._call_social_login_view(AppleLoginView, {"id_token": data.id_token})
 
             if response.status_code == HTTP_OK:
                 return response.data
