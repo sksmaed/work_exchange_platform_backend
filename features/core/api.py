@@ -1,9 +1,10 @@
+from typing import Any, ClassVar
+
 from allauth.socialaccount.providers.apple.views import AppleOAuth2Adapter
 from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 from django.core.handlers.wsgi import WSGIRequest
-from django.http import JsonResponse
 from ninja import Router
 from ninja_extra import api_controller
 from ninja_extra.controllers import ControllerBase
@@ -58,6 +59,12 @@ class AppleLoginView(SocialLoginView):
 class SocialAuthController(ControllerBase):
     """Social authentication controller for Google, Facebook, and Apple login."""
 
+    STATUS_OK: ClassVar[int] = 200
+    STATUS_BAD_REQUEST: ClassVar[int] = 400
+    STATUS_UNAUTHORIZED: ClassVar[int] = 401
+    STATUS_INTERNAL_ERROR: ClassVar[int] = 500
+    allowed_status_codes: ClassVar[set[int]] = {STATUS_OK, STATUS_BAD_REQUEST, STATUS_UNAUTHORIZED}
+
     def _call_social_login_view(
         self,
         incoming_request: WSGIRequest,
@@ -84,8 +91,22 @@ class SocialAuthController(ControllerBase):
         view = view_cls.as_view()
         return view(request)
 
-    @Route.post("/facebook/", url_name="facebook_login")
-    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> JsonResponse:
+    def _build_api_response(self, response: Response) -> tuple[int, dict[str, Any]]:
+        """Normalize DRF response payload for Ninja and keep known status codes."""
+        payload = response.data if isinstance(response.data, dict) else {"data": response.data}
+        status_code = (
+            response.status_code if response.status_code in self.allowed_status_codes else self.STATUS_INTERNAL_ERROR
+        )
+        if status_code == self.STATUS_INTERNAL_ERROR:
+            payload = {
+                "error": "Social login upstream error",
+                "upstream_status": response.status_code,
+                "details": payload,
+            }
+        return status_code, payload
+
+    @Route.post("/facebook/", url_name="facebook_login", response={200: dict, 400: dict, 401: dict, 500: dict})
+    def facebook_login(self, request: WSGIRequest, data: FacebookLoginRequestSchema) -> tuple[int, dict[str, Any]]:
         """Facebook OAuth2 Login.
 
         Exchange Facebook access token for JWT tokens.
@@ -99,20 +120,16 @@ class SocialAuthController(ControllerBase):
         """
         try:
             response = self._call_social_login_view(request, FacebookLoginView, {"access_token": data.access_token})
-            payload = response.data if isinstance(response.data, dict) else {"data": response.data}
-            return JsonResponse(payload, status=response.status_code)
+            return self._build_api_response(response)
         except Exception as e:
-            return JsonResponse(
-                {
-                    "error": "Facebook login error",
-                    "exception_type": type(e).__name__,
-                    "message": str(e) or repr(e),
-                },
-                status=500,
-            )
+            return self.STATUS_INTERNAL_ERROR, {
+                "error": "Facebook login error",
+                "exception_type": type(e).__name__,
+                "message": str(e) or repr(e),
+            }
 
-    @Route.post("/google/", url_name="google_login")
-    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> JsonResponse:
+    @Route.post("/google/", url_name="google_login", response={200: dict, 400: dict, 401: dict, 500: dict})
+    def google_login(self, request: WSGIRequest, data: GoogleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
         """Google OAuth2 Login.
 
         Exchange Google access token for JWT tokens.
@@ -126,20 +143,16 @@ class SocialAuthController(ControllerBase):
         """
         try:
             response = self._call_social_login_view(request, GoogleLoginView, {"access_token": data.access_token})
-            payload = response.data if isinstance(response.data, dict) else {"data": response.data}
-            return JsonResponse(payload, status=response.status_code)
+            return self._build_api_response(response)
         except Exception as e:
-            return JsonResponse(
-                {
-                    "error": "Google login error",
-                    "exception_type": type(e).__name__,
-                    "message": str(e) or repr(e),
-                },
-                status=500,
-            )
+            return self.STATUS_INTERNAL_ERROR, {
+                "error": "Google login error",
+                "exception_type": type(e).__name__,
+                "message": str(e) or repr(e),
+            }
 
-    @Route.post("/apple/", url_name="apple_login")
-    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> JsonResponse:
+    @Route.post("/apple/", url_name="apple_login", response={200: dict, 400: dict, 401: dict, 500: dict})
+    def apple_login(self, request: WSGIRequest, data: AppleLoginRequestSchema) -> tuple[int, dict[str, Any]]:
         """Apple Sign In OAuth2 Login.
 
         Exchange Apple identity token (id_token) for JWT tokens.
@@ -153,14 +166,10 @@ class SocialAuthController(ControllerBase):
         """
         try:
             response = self._call_social_login_view(request, AppleLoginView, {"id_token": data.id_token})
-            payload = response.data if isinstance(response.data, dict) else {"data": response.data}
-            return JsonResponse(payload, status=response.status_code)
+            return self._build_api_response(response)
         except Exception as e:
-            return JsonResponse(
-                {
-                    "error": "Apple login error",
-                    "exception_type": type(e).__name__,
-                    "message": str(e) or repr(e),
-                },
-                status=500,
-            )
+            return self.STATUS_INTERNAL_ERROR, {
+                "error": "Apple login error",
+                "exception_type": type(e).__name__,
+                "message": str(e) or repr(e),
+            }
