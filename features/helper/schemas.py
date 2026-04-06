@@ -81,6 +81,7 @@ class HelperProfileResponseSchema(Schema):
     """Schema for the helper profile response."""
 
     id: UUID
+    user_id: UUID | None = None
     description: str
     birthday: date
     gender: str | None = None

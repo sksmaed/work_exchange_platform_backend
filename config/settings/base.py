@@ -197,6 +197,7 @@ ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 ACCOUNT_ADAPTER = "config.adapters.AccountAdapter"
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 
 # Social account settings for Google and Facebook login
 SOCIALACCOUNT_PROVIDERS = {
@@ -261,10 +262,10 @@ SIMPLE_JWT = {
 # dj-rest-auth settings
 REST_AUTH = {
     "USE_JWT": True,
-    "JWT_AUTH_COOKIE": "access_token",
-    "JWT_AUTH_REFRESH_COOKIE": "refresh_token",
+    "JWT_AUTH_HTTPONLY": False,  # Return tokens in JSON body, not HttpOnly cookies
     "LOGIN_SERIALIZER": "features.core.serializers.LoginSerializer",
-    "USER_DETAILS_SERIALIZER": "dj_rest_auth.serializers.UserDetailsSerializer",
+    "USER_DETAILS_SERIALIZER": "features.core.serializers.CustomUserDetailsSerializer",
+    "REGISTER_SERIALIZER": "features.core.serializers.CustomRegisterSerializer",
 }
 
 # Password validation

@@ -62,6 +62,7 @@ class HelperControllerAPI:
         photos = [self._photo_to_dict(photo) for photo in helper.photos.all()]
         return {
             "id": str(helper.id),
+            "user_id": str(helper.user_id),
             "description": helper.description,
             "birthday": helper.birthday,
             "gender": helper.gender,

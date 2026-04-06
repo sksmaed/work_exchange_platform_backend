@@ -1,10 +1,12 @@
 import re
 import typing
 from datetime import date
+from uuid import UUID
 
 from ninja import Field, ModelSchema, Schema
+from pydantic import field_validator
 
-from features.host.models import Host, Vacancy, VacancyAvailability
+from features.host.models import Host, HostReview, Vacancy, VacancyAvailability
 
 MONTHS_PER_YEAR = 12
 
@@ -71,9 +73,11 @@ class HostResponseSchema(ModelSchema):
 class HostCreateSchema(Schema):
     """Schema for creating a new Host."""
 
-    description: str
-    address: str
-    type: str
+    name: str | None = ""
+    description: str | None = ""
+    address: str | None = ""
+    type: str | None = ""
+    phone_number: str | None = ""
     contact_information: str | None = ""
     pocket_money: int | None = 0
     meals_offered: str | None = ""
@@ -88,9 +92,11 @@ class HostCreateSchema(Schema):
 class HostUpdateSchema(Schema):
     """Schema for updating Host."""
 
+    name: str | None = None
     description: str | None = None
     type: str | None = None
     address: str | None = None
+    phone_number: str | None = None
     contact_information: str | None = None
     pocket_money: int | None = None
     meals_offered: str | None = None
@@ -100,6 +106,14 @@ class HostUpdateSchema(Schema):
     other: str | None = None
     expected_duration: str | None = None
     recruitment_slogan: str | None = None
+
+
+class HostBriefSchema(ModelSchema):
+    """Compact host schema for embedding in vacancy responses."""
+
+    class Meta:
+        model = Host
+        fields = ("id", "user", "name", "address", "type", "avg_rating", "host_image")
 
 
 class VacancyAvailabilitySchema(ModelSchema):
@@ -114,6 +128,7 @@ class VacancyResponseSchema(ModelSchema):
     """Schema for Vacancy response."""
 
     availabilities: list[VacancyAvailabilitySchema] = Field(default_factory=list)
+    host: HostBriefSchema
 
     class Meta:
         model = Vacancy
@@ -126,7 +141,6 @@ class VacancyResponseSchema(ModelSchema):
 class VacancyCreateSchema(Schema):
     """Schema for creating a new Vacancy."""
 
-    host_id: str
     name: str
     work_time: str
     description: str
@@ -158,3 +172,65 @@ class VacancyUpdateSchema(Schema):
     other_questions: list[str] | None = None
     status: str | None = None
     availabilities: list[dict[str, typing.Any]] | None = None
+
+
+# ---------- Host Review Schemas ----------
+
+
+class HostReviewCreateSchema(Schema):
+    """Schema for creating a HostReview."""
+
+    rating: int = Field(..., ge=1, le=5)
+    comment: str = ""
+    photos: list[str] = Field(default_factory=list)
+
+    @field_validator("photos")
+    @classmethod
+    def limit_photos(cls, v: list[str]) -> list[str]:
+        """Cap at 5 images (data URLs from the client)."""
+        return v[:5]
+
+
+class HostReviewResponseSchema(ModelSchema):
+    """Schema for HostReview response, enriched with reviewer display info."""
+
+    reviewer_id: UUID
+    reviewer_name: str = ""
+    reviewer_avatar: str | None = None
+    photo_urls: list[str] = Field(default_factory=list)
+
+    class Meta:
+        model = HostReview
+        fields = ("id", "rating", "comment", "created_at")
+
+    @staticmethod
+    def resolve_reviewer_id(obj: HostReview) -> UUID:
+        """Return reviewer's UUID."""
+        return obj.reviewer_id  # type: ignore[return-value]
+
+    @staticmethod
+    def resolve_reviewer_name(obj: HostReview) -> str:
+        """Return reviewer's display name."""
+        return obj.reviewer.username
+
+    @staticmethod
+    def resolve_reviewer_avatar(obj: HostReview) -> str | None:
+        """Return reviewer's avatar URL from User.avatar (same as helper profile)."""
+        user = obj.reviewer
+        if user.avatar:
+            return user.avatar.url
+        return None
+
+    @staticmethod
+    def resolve_photo_urls(obj: HostReview) -> list[str]:
+        """Return absolute media URLs for review images."""
+        return [img.image.url for img in obj.images.all()]
+
+
+class HostReviewSummarySchema(Schema):
+    """Aggregated review statistics for a host."""
+
+    average_rating: float
+    total_reviews: int
+    distribution: dict[int, int]
+    reviews: list[HostReviewResponseSchema]
