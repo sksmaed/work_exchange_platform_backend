@@ -7,7 +7,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from ninja import File, Form, UploadedFile
 from ninja_extra import api_controller, route
-from ninja_extra.permissions import IsAuthenticated
+from ninja_extra.permissions import AllowAny, IsAuthenticated
 
 from common.exceptions import Http403ForbiddenException, KeyNotFoundException
 from features.core.models import User
@@ -111,7 +111,7 @@ class HostPostControllerAPI:
         post = Post.objects.prefetch_related("photos").get(id=post.id)
         return {"data": _transform_post_response(post, request.user)}
 
-    @route.get("/{host_id}/posts")
+    @route.get("/{host_id}/posts", auth=None, permissions=[AllowAny])
     def list_posts(
         self,
         request: WSGIRequest,
@@ -144,7 +144,7 @@ class PostActionControllerAPI:
 
     MAX_PAGE_SIZE: ClassVar[int] = 100
 
-    @route.get("", response=AllPostListResponseSchema)
+    @route.get("", response=AllPostListResponseSchema, auth=None, permissions=[AllowAny])
     def list_all_posts(
         self,
         request: WSGIRequest,
@@ -167,7 +167,7 @@ class PostActionControllerAPI:
             has_next=page_obj.has_next(),
         )
 
-    @route.get("/{post_id}")
+    @route.get("/{post_id}", auth=None, permissions=[AllowAny])
     def get_post(self, request: WSGIRequest, post_id: str) -> dict[str, PostResponseSchema]:
         """Get a post by ID."""
         try:

@@ -4,7 +4,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from ninja import File, UploadedFile
 from ninja_extra import api_controller, route
-from ninja_extra.permissions import IsAuthenticated
+from ninja_extra.permissions import AllowAny, IsAuthenticated
 
 from common.exceptions import (
     ErrorDetail,
@@ -96,7 +96,7 @@ class ForumControllerAPI:
             "created_at": thread.created_at,
         }
 
-    @route.get("/categories", response={200: list[ForumCategoryResponseSchema]})
+    @route.get("/categories", response={200: list[ForumCategoryResponseSchema]}, auth=None, permissions=[AllowAny])
     def list_categories(self, request: WSGIRequest) -> list[dict]:
         """List all forum categories (public)."""
         categories = ForumCategory.objects.all()
@@ -111,7 +111,7 @@ class ForumControllerAPI:
             for c in categories
         ]
 
-    @route.get("/threads", response={200: ForumThreadListPaginatedSchema})
+    @route.get("/threads", response={200: ForumThreadListPaginatedSchema}, auth=None, permissions=[AllowAny])
     def list_threads(
         self,
         request: WSGIRequest,
@@ -162,7 +162,7 @@ class ForumControllerAPI:
             "has_next": page_obj.has_next(),
         }
 
-    @route.get("/threads/{thread_id}", response={200: ForumThreadDetailResponseSchema})
+    @route.get("/threads/{thread_id}", response={200: ForumThreadDetailResponseSchema}, auth=None, permissions=[AllowAny])
     def get_thread(self, request: WSGIRequest, thread_id: str) -> dict:
         """Get a thread with its replies (public)."""
         try:

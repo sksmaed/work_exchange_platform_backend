@@ -83,7 +83,12 @@ def _replace_review_images_from_data_urls(review: HostReview, photos: list[str],
 class HostControllerAPI:
     """API endpoints for managing hosts."""
 
-    @route.get("", response={200: NinjaPaginationResponseSchema[HostResponseSchema]})
+    @route.get(
+        "",
+        response={200: NinjaPaginationResponseSchema[HostResponseSchema]},
+        auth=None,
+        permissions=[AllowAny],
+    )
     @paginate(PageNumberPagination)
     @searching(Searching, search_fields=["description", "type", "address"])
     @ordering(Ordering, ordering_fields=["created_at", "avg_rating"])
@@ -148,7 +153,7 @@ class HostControllerAPI:
         host.save(user=user)
         return host
 
-    @route.get("/{host_id}", response={200: HostResponseSchema})
+    @route.get("/{host_id}", response={200: HostResponseSchema}, auth=None, permissions=[AllowAny])
     def get_host(self, request: WSGIRequest, host_id: str) -> Host:  # noqa: ARG002
         """Retrieve a single host by ID."""
         try:
