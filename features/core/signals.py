@@ -3,6 +3,7 @@ import traceback
 from allauth.account.signals import user_signed_up
 from django.db import transaction
 from django.dispatch import receiver
+
 from features.core.models import User
 from features.helper.models import HelperModel
 from features.host.models import Host
@@ -47,7 +48,7 @@ def create_user_profiles(sender, request, user: User, **kwargs: object) -> None:
                     facilities="",
                     other="",
                     expected_duration="",
-                    vehicle=Host.VehicleChoices.NONE,
+                    vehicle="",
                     recruitment_slogan="",
                     avg_rating=0.0,
                 )

@@ -86,6 +86,7 @@ class HostCreateSchema(Schema):
     facilities: str | None = ""
     other: str | None = ""
     expected_duration: str | None = ""
+    vehicle: str | None = ""
     recruitment_slogan: str | None = ""
 
 
@@ -105,6 +106,7 @@ class HostUpdateSchema(Schema):
     facilities: str | None = None
     other: str | None = None
     expected_duration: str | None = None
+    vehicle: str | None = None
     recruitment_slogan: str | None = None
 
 

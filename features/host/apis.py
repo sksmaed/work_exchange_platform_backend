@@ -1,6 +1,7 @@
 import base64
 import re
 
+from core.models import User
 from django.core.files.base import ContentFile
 from django.core.handlers.wsgi import WSGIRequest
 from django.db import transaction
@@ -8,12 +9,18 @@ from django.db.models import Exists, F, OuterRef, Q, QuerySet
 from ninja_extra import api_controller, route
 from ninja_extra.ordering import Ordering, ordering
 from ninja_extra.pagination import PageNumberPagination, paginate
+from ninja_extra.permissions import AllowAny, IsAuthenticated
 from ninja_extra.schemas import NinjaPaginationResponseSchema
 from ninja_extra.searching import Searching, searching
 
-from common.exceptions import ErrorCode, ErrorDetail, Http400BadRequestException, Http403ForbiddenException, KeyNotFoundException
+from common.exceptions import (
+    ErrorCode,
+    ErrorDetail,
+    Http400BadRequestException,
+    Http403ForbiddenException,
+    KeyNotFoundException,
+)
 from features.host.exceptions import HostNotFoundError, VacancyNotFoundError
-from ninja_extra.permissions import AllowAny, IsAuthenticated
 from features.host.models import Host, HostReview, HostReviewImage, Vacancy, VacancyAvailability
 from features.host.schemas import (
     HostCreateSchema,
@@ -34,7 +41,7 @@ _DATA_URL_RE = re.compile(
 )
 
 
-def _replace_review_images_from_data_urls(review: HostReview, photos: list[str], user) -> None:
+def _replace_review_images_from_data_urls(review: HostReview, photos: list[str], user: User) -> None:
     """Replace review images with decoded data URLs from the client (ReviewModal)."""
     review.images.all().delete()
     for i, data_url in enumerate(photos):
@@ -148,6 +155,7 @@ class HostControllerAPI:
             facilities=data.facilities or "",
             other=data.other or "",
             expected_duration=data.expected_duration or "",
+            vehicle=data.vehicle or "",
             recruitment_slogan=data.recruitment_slogan or "",
         )
         host.save(user=user)
@@ -374,11 +382,7 @@ class HostControllerAPI:
 
             self._refresh_avg_rating(host)
 
-        return (
-            HostReview.objects.select_related("reviewer")
-            .prefetch_related("images")
-            .get(pk=review.pk)
-        )
+        return HostReview.objects.select_related("reviewer").prefetch_related("images").get(pk=review.pk)
 
     @route.delete("/{host_id}/reviews/{review_id}")
     def delete_review(self, request: WSGIRequest, host_id: str, review_id: str) -> dict:
@@ -391,7 +395,6 @@ class HostControllerAPI:
 
         review = HostReview.objects.filter(id=review_id, host=host).first()
         if not review:
-            from ninja import errors  # noqa: PLC0415
             raise KeyNotFoundException(HostNotFoundError, review_id)
 
         if review.reviewer != user:

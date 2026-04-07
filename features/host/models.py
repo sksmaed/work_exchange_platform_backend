@@ -92,6 +92,11 @@ class Host(BaseModel):
         blank=True,
         default="",
     )
+    allowance = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+    )
     facilities = models.TextField(
         blank=True,
         default="",
@@ -106,16 +111,10 @@ class Host(BaseModel):
         default="",
     )
 
-    class VehicleChoices(models.TextChoices):
-        NONE = "None", "None"
-        DRIVING = "Driving", "Driving License"
-        MOTORCYCLE = "Motorcycle", "Motorcycle License"
-        BOTH = "Both", "Both Licenses"
-
     vehicle = models.CharField(
         max_length=20,
-        choices=VehicleChoices.choices,
-        default=VehicleChoices.NONE,
+        default="",
+        blank=True,
     )
     recruitment_slogan = models.TextField(
         blank=True,
@@ -142,7 +141,7 @@ class HostReview(BaseModel):
     reviewer : ForeignKey
         The user who wrote the review.
     rating : IntegerField
-        Integer rating 1–5.
+        Integer rating 1-5.
     comment : TextField
         Optional text comment.
     """
@@ -163,7 +162,7 @@ class HostReview(BaseModel):
     comment = models.TextField(blank=True, default="")
 
     class Meta:
-        unique_together = [("host", "reviewer")]
+        unique_together: ClassVar[list[tuple[str, str]]] = [("host", "reviewer")]
 
     def __str__(self) -> str:
         """Return string representation."""
