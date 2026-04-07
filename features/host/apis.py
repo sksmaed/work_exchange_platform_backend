@@ -1,7 +1,6 @@
 import base64
 import re
 
-from core.models import User
 from django.core.files.base import ContentFile
 from django.core.handlers.wsgi import WSGIRequest
 from django.db import transaction
@@ -20,6 +19,7 @@ from common.exceptions import (
     Http403ForbiddenException,
     KeyNotFoundException,
 )
+from features.core.models import User
 from features.host.exceptions import HostNotFoundError, VacancyNotFoundError
 from features.host.models import Host, HostReview, HostReviewImage, Vacancy, VacancyAvailability
 from features.host.schemas import (
