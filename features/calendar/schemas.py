@@ -24,6 +24,13 @@ class CalendarEventResponseSchema(ModelSchema):
         )
 
 
+class CalendarEventOccupancySchema(Schema):
+    """Public occupancy payload for helper-side vacancy calendars."""
+
+    start_date: date
+    end_date: date
+
+
 class CalendarEventUpdateSchema(Schema):
     """Schema for updating a calendar event."""
 

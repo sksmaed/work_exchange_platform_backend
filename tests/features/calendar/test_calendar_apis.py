@@ -144,13 +144,7 @@ def test_accepted_application(test_helper, test_vacancy, test_vacancy_availabili
 def host_client(host_user):
     """Return a client authenticated as the host user."""
     client = Client()
-    response = client.post(
-        "/api/auth/login/",
-        {"email": TEST_HOST_EMAIL, "password": TEST_HOST_PASSWORD},
-        content_type="application/json",
-    )
-    assert response.status_code == 200, f"Host login failed: {response.content}"
-    client.cookies.update(response.cookies)
+    client.force_login(host_user)
     return client
 
 
@@ -158,13 +152,7 @@ def host_client(host_user):
 def helper_client(helper_user):
     """Return a client authenticated as the helper user."""
     client = Client()
-    response = client.post(
-        "/api/auth/login/",
-        {"email": TEST_HELPER_EMAIL, "password": TEST_HELPER_PASSWORD},
-        content_type="application/json",
-    )
-    assert response.status_code == 200, f"Helper login failed: {response.content}"
-    client.cookies.update(response.cookies)
+    client.force_login(helper_user)
     return client
 
 
@@ -186,6 +174,7 @@ class TestCalendarAPI:
         assert len(data) == 1
         assert data[0]["start_date"] == "2025-06-05"
         assert data[0]["end_date"] == "2025-06-20"
+        assert "helper" in data[0]
 
     def test_list_calendar_events_forbidden_for_other_user(
         self,
@@ -193,11 +182,103 @@ class TestCalendarAPI:
         test_host: Host,
         test_accepted_application: Application,
     ):
-        """Non-owner cannot view a host's calendar events."""
+        """Non-owner cannot view a host's private calendar events."""
         url = f"/api/calendar/hosts/{test_host.id}/events"
         response = helper_client.get(url)
 
         assert response.status_code == 403
+
+    def test_list_host_occupancy_visible_for_other_authenticated_user(
+        self,
+        helper_client: Client,
+        test_host: Host,
+        test_accepted_application: Application,
+    ):
+        """Authenticated users can read host occupancy date ranges."""
+        url = f"/api/calendar/hosts/{test_host.id}/occupancy"
+        response = helper_client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["start_date"] == "2025-06-05"
+        assert data[0]["end_date"] == "2025-06-20"
+        assert sorted(data[0].keys()) == ["end_date", "start_date"]
+
+    def test_list_host_occupancy_only_returns_accepted_applications(
+        self,
+        host_client: Client,
+        test_host: Host,
+        test_helper: HelperModel,
+        test_vacancy: Vacancy,
+    ):
+        """Occupancy endpoint should only return accepted applications."""
+        pending_application = Application.objects.create(
+            helper=test_helper,
+            vacancy=test_vacancy,
+            start_date=date(2025, 6, 21),
+            end_date=date(2025, 6, 24),
+            status=Application.StatusChoices.PENDING,
+        )
+        CalendarEvent.objects.create(
+            host=test_host,
+            helper=test_helper,
+            application=pending_application,
+            start_date=pending_application.start_date,
+            end_date=pending_application.end_date,
+            remarks="Pending should not be visible.",
+        )
+
+        accepted_helper_user = User.objects.create_user(
+            username="calendar_helper_user_2",
+            email="calendar_helper_2@example.com",
+            password=TEST_HELPER_PASSWORD,
+            user_type="Helper",
+        )
+        accepted_helper = HelperModel(
+            user=accepted_helper_user,
+            description="Second helper for accepted calendar test",
+            birthday="1996-04-12",
+            gender=HelperModel.GenderChoices.FEMALE,
+            residence="Test City",
+            expected_place=["City X"],
+            expected_time_periods=[{"start_date": "2025-06-01", "end_date": "2025-06-30"}],
+            expected_treatments=["gardening"],
+            personality="Calm",
+            motivation="Love nature",
+            hobbies="Hiking",
+            licenses=HelperModel.LicenseChoices.NONE,
+            languages=["English"],
+            avg_rating=4.0,
+        )
+        accepted_helper.save(user=accepted_helper_user)
+
+        accepted_application = Application.objects.create(
+            helper=accepted_helper,
+            vacancy=test_vacancy,
+            start_date=date(2025, 6, 10),
+            end_date=date(2025, 6, 12),
+            status=Application.StatusChoices.ACCEPTED,
+        )
+        CalendarEvent.objects.create(
+            host=test_host,
+            helper=accepted_helper,
+            application=accepted_application,
+            start_date=accepted_application.start_date,
+            end_date=accepted_application.end_date,
+            remarks="Accepted should be visible.",
+        )
+
+        url = f"/api/calendar/hosts/{test_host.id}/occupancy"
+        response = host_client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["start_date"] == "2025-06-10"
+        assert data[0]["end_date"] == "2025-06-12"
+        assert sorted(data[0].keys()) == ["end_date", "start_date"]
 
     def test_update_calendar_event(
         self,

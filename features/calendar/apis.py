@@ -4,9 +4,14 @@ from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 
 from common.exceptions import Http403ForbiddenException, KeyNotFoundException
+from features.application.models import Application
 from features.calendar.exceptions import CalendarEventNotFoundError
 from features.calendar.models import CalendarEvent
-from features.calendar.schemas import CalendarEventResponseSchema, CalendarEventUpdateSchema
+from features.calendar.schemas import (
+    CalendarEventOccupancySchema,
+    CalendarEventResponseSchema,
+    CalendarEventUpdateSchema,
+)
 from features.host.exceptions import HostNotFoundError
 from features.host.models import Host
 
@@ -25,11 +30,25 @@ class CalendarControllerAPI:
         except Host.DoesNotExist:
             raise KeyNotFoundException(HostNotFoundError, host_id)
 
-        # Ensure the user asking is the host owner
+        # Keep host events private for host-side calendar operations.
         if host.user != user:
             raise Http403ForbiddenException("You do not have permission to view these calendar events")
 
         return CalendarEvent.objects.filter(host=host).select_related("helper", "helper__user").order_by("start_date")
+
+    @route.get("/hosts/{host_id}/occupancy", response={200: list[CalendarEventOccupancySchema]})
+    def list_host_occupancy(self, request: WSGIRequest, host_id: str) -> QuerySet[CalendarEvent]:
+        """Retrieve accepted occupancy date ranges for a host (helper-facing public data)."""
+        _ = request.user  # endpoint requires authentication via controller permission
+
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        return CalendarEvent.objects.filter(host=host, application__status=Application.StatusChoices.ACCEPTED).order_by(
+            "start_date"
+        )
 
     @route.patch("/events/{event_id}", response={200: CalendarEventResponseSchema})
     def update_calendar_event(
