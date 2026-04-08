@@ -61,6 +61,8 @@ class ForumThread(BaseModel):
         blank=True,
         related_name="threads",
     )
+    # Counters
+    like_count = models.IntegerField(default=0)
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-created_at"]
@@ -115,6 +117,16 @@ class ForumReply(BaseModel):
         on_delete=models.CASCADE,
         related_name="forum_replies",
     )
+    # Optional parent reply for threaded replies
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="child_replies",
+    )
+    # Like counter for replies
+    like_count = models.IntegerField(default=0)
     content = models.TextField()
 
     class Meta:

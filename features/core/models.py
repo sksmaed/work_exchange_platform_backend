@@ -33,13 +33,11 @@ class User(AbstractUser, BaseModel):
         blank=True,
         max_length=255,
     )
-    first_name = models.CharField(
-        max_length=150,
+    phone = models.CharField(
+        max_length=30,
         blank=True,
-    )
-    last_name = models.CharField(
-        max_length=150,
-        blank=True,
+        default="",
+        help_text="Optional phone number for the user",
     )
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(
