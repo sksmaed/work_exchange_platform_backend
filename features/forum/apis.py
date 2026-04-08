@@ -81,6 +81,7 @@ class ForumControllerAPI:
             "category_id": str(thread.category_id) if thread.category_id else None,
             "category_name": thread.category.name if thread.category else None,
             "reply_count": len(replies),
+            "like_count": getattr(thread, "like_count", 0),
             "image_urls": self._thread_image_urls(thread),
             "replies": [
                 {
@@ -88,6 +89,8 @@ class ForumControllerAPI:
                     "thread_id": str(r.thread_id),
                     "author": self._user_to_basic_schema(r.author),
                     "content": r.content,
+                    "parent_id": str(r.parent_id) if r.parent_id else None,
+                    "like_count": getattr(r, "like_count", 0),
                     "image_urls": self._reply_image_urls(r),
                     "created_at": r.created_at,
                 }
@@ -147,7 +150,8 @@ class ForumControllerAPI:
                 "author": self._user_to_basic_schema(t.author),
                 "category_id": str(t.category_id) if t.category_id else None,
                 "category_name": t.category.name if t.category else None,
-                "reply_count": t.reply_count,
+                    "reply_count": t.reply_count,
+                    "like_count": getattr(t, "like_count", 0),
                 "image_urls": self._thread_image_urls(t),
                 "created_at": t.created_at,
             }
@@ -270,14 +274,25 @@ class ForumControllerAPI:
         user = request.user
 
         thread = get_object_or_404(ForumThread, id=thread_id)
+        # If parent_id provided, validate it and that it belongs to the same thread
+        parent = None
+        if getattr(data, "parent_id", None):
+            try:
+                parent = ForumReply.objects.get(id=data.parent_id)
+            except ForumReply.DoesNotExist:
+                raise KeyNotFoundException(ForumReplyNotFoundError, data.parent_id)
+            if parent.thread_id != thread.id:
+                # Parent must belong to same thread
+                raise Http400BadRequestException([ErrorDetail(ForumReplyNotFoundError, {"message": "Parent reply not found in this thread"})])
 
-        reply = ForumReply(thread=thread, author=user, content=data.content)
+        reply = ForumReply(thread=thread, author=user, content=data.content, parent=parent)
         reply.save(user=user)
 
         return {
             "id": str(reply.id),
             "thread_id": str(reply.thread_id),
             "author": self._user_to_basic_schema(reply.author),
+            "parent_id": str(reply.parent_id) if reply.parent_id else None,
             "content": reply.content,
             "image_urls": self._reply_image_urls(reply),
             "created_at": reply.created_at,

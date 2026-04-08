@@ -56,6 +56,7 @@ class ForumThreadListResponseSchema(Schema):
     category_id: str | None
     category_name: str | None
     reply_count: int
+    like_count: int | None = None
     image_urls: list[str] = []
     created_at: datetime
 
@@ -67,6 +68,7 @@ class ForumReplyResponseSchema(Schema):
     thread_id: str
     author: UserBasicSchema
     content: str
+    parent_id: str | None = None
     image_urls: list[str] = []
     created_at: datetime
 
@@ -75,6 +77,7 @@ class ForumReplyCreateSchema(Schema):
     """Schema for creating a forum reply."""
 
     content: str
+    parent_id: str | None = None
 
 
 class ForumReplyUpdateSchema(Schema):

@@ -147,6 +147,21 @@ class TestPostAPI:
         assert data["total"] == 1
         assert data["comments"][0]["content"] == "Comment 1"
 
+    def test_create_reply_comment(self, other_client: Client, test_post: Post, other_user: User):
+        # Create a parent comment first
+        parent_resp = other_client.post(f"/api/posts/{test_post.id}/comments", data={"content": "Parent"})
+        assert parent_resp.status_code == 200
+        parent_id = parent_resp.json()["data"]["id"]
+
+        # Create a reply to the parent
+        reply_resp = other_client.post(
+            f"/api/posts/{test_post.id}/comments", data={"content": "Reply", "parent_id": parent_id}
+        )
+        assert reply_resp.status_code == 200
+        reply_data = reply_resp.json()["data"]
+        assert reply_data["content"] == "Reply"
+        assert reply_data["parent_id"] == parent_id
+
     def test_delete_comment_by_owner(self, other_client: Client, test_post: Post, other_user: User):
         c = Comment(post=test_post, user=other_user, content="Comment 1")
         c.save(user=other_user)

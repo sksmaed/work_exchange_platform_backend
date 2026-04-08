@@ -62,6 +62,7 @@ class CommentResponseSchema(Schema):
     id: UUID
     post_id: UUID
     user: UserSimpleResponseSchema
+    parent_id: UUID | None = None
     content: str
     created_at: datetime
 

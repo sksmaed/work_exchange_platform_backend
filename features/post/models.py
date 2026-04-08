@@ -99,6 +99,15 @@ class Comment(BaseModel):
         "core.User",
         on_delete=models.CASCADE,
     )
+    # Optional parent comment for nested/reply comments
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="replies",
+    )
+
     content = models.TextField()
 
     class Meta:

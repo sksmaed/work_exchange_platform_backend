@@ -212,7 +212,11 @@ class PostActionControllerAPI:
 
     @route.post("/{post_id}/comments", permissions=[IsAuthenticated])
     def create_comment(
-        self, request: WSGIRequest, post_id: str, content: str = Form(...)
+        self,
+        request: WSGIRequest,
+        post_id: str,
+        content: str = Form(...),
+        parent_id: str | None = Form(None),
     ) -> dict[str, CommentResponseSchema]:
         """Create a comment on a post."""
         try:
@@ -220,8 +224,19 @@ class PostActionControllerAPI:
         except (Post.DoesNotExist, ValidationError):
             raise PostNotFoundError
 
+        # If parent_id provided, validate it exists and belongs to the same post
+        parent_comment = None
+        if parent_id:
+            try:
+                parent_comment = Comment.objects.get(id=parent_id)
+            except (Comment.DoesNotExist, ValidationError):
+                raise CommentNotFoundError
+            if parent_comment.post_id != post.id:
+                # parent must belong to the same post
+                raise ValidationError("Parent comment does not belong to the same post")
+
         with transaction.atomic():
-            comment = Comment(post=post, user=request.user, content=content)
+            comment = Comment(post=post, user=request.user, content=content, parent=parent_comment)
             comment.save(user=request.user)
             post.comment_count += 1
             post.save(user=request.user)
@@ -234,6 +249,7 @@ class PostActionControllerAPI:
                 id=comment.id,
                 post_id=post.id,
                 user=user_schema,
+                parent_id=comment.parent_id,
                 content=comment.content,
                 created_at=comment.created_at,
             )
@@ -264,6 +280,7 @@ class PostActionControllerAPI:
                 id=c.id,
                 post_id=c.post_id,
                 user=UserSimpleResponseSchema(id=c.user.id, username=c.user.username, email=c.user.email),
+                parent_id=c.parent_id,
                 content=c.content,
                 created_at=c.created_at,
             )

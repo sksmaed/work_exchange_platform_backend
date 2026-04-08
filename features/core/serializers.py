@@ -29,7 +29,9 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
     user_type = serializers.CharField(read_only=True)
 
     class Meta(UserDetailsSerializer.Meta):
-        fields = UserDetailsSerializer.Meta.fields + ("user_type",)
+        # Explicitly export only the fields we want the client to receive.
+        # Remove Django's default first_name/last_name from the API output.
+        fields = ("pk", "email", "name", "phone", "user_type")
 
 
 class CustomSocialLoginSerializer(SocialLoginSerializer):
@@ -52,6 +54,8 @@ class CustomRegisterSerializer(RegisterSerializer):
 
     # username is auto-generated in AccountAdapter.save_user — not required from client
     username = serializers.CharField(required=False, allow_blank=True, default="")
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+    phone = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_username(self, value):
         # Skip allauth's username uniqueness check; adapter will generate a unique username
@@ -73,10 +77,15 @@ class CustomRegisterSerializer(RegisterSerializer):
     def get_cleaned_data(self):
         data = super().get_cleaned_data()
         data["user_type"] = self.validated_data.get("user_type", User.UserTypeChoices.HELPER)
+        data["name"] = self.validated_data.get("name", "")
+        data["phone"] = self.validated_data.get("phone", "")
         return data
 
     def save(self, request):
         user = super().save(request)
         user.user_type = self.cleaned_data.get("user_type", User.UserTypeChoices.HELPER)
-        user.save(update_fields=["user_type"])
+        # Save user_type, name and phone if provided
+        user.name = self.cleaned_data.get("name", "")
+        user.phone = self.cleaned_data.get("phone", "")
+        user.save(update_fields=["user_type", "name", "phone"])
         return user

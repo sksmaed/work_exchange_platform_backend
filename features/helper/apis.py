@@ -63,6 +63,8 @@ class HelperControllerAPI:
         return {
             "id": str(helper.id),
             "user_id": str(helper.user_id),
+            "name": helper.user.name,
+            "phone": getattr(helper.user, "phone", ""),
             "description": helper.description,
             "birthday": helper.birthday,
             "gender": helper.gender,
