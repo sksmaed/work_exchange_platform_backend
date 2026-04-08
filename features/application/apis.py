@@ -19,7 +19,7 @@ from features.application.schemas import (
     ApplicationStatusUpdateSchema,
 )
 from features.helper.models import HelperModel
-from features.host.models import Host, Vacancy
+from features.host.models import Host, Vacancy, VacancyAvailability
 
 MAX_VACANCY_CAPACITY = 20
 
@@ -27,6 +27,32 @@ MAX_VACANCY_CAPACITY = 20
 @api_controller(prefix_or_class="applications", tags=["applications"], permissions=[IsAuthenticated])
 class ApplicationControllerAPI:
     """API endpoints for managing applications."""
+
+    @staticmethod
+    def _resolve_vacancy_and_availability(data: ApplicationCreateSchema) -> tuple[Vacancy, VacancyAvailability | None]:
+        """Resolve a recruiting vacancy under host_id with available capacity in date range."""
+        availability = (
+            VacancyAvailability.objects.filter(
+                vacancy__host_id=data.host_id,
+                vacancy__status=Vacancy.StatusChoices.RECRUITING,
+                start_date__lte=data.start_date,
+                end_date__gte=data.end_date,
+                current_helpers__lt=F("capacity"),
+            )
+            .select_related("vacancy")
+            .order_by("vacancy__created_at", "vacancy_id")
+            .first()
+        )
+
+        if availability:
+            return availability.vacancy, availability
+
+        fallback_vacancy = (
+            Vacancy.objects.filter(host_id=data.host_id, status=Vacancy.StatusChoices.RECRUITING)
+            .order_by("created_at", "id")
+            .first()
+        )
+        return fallback_vacancy, None
 
     @route.post("", response={201: ApplicationResponseSchema})
     def create_application(self, request: WSGIRequest, data: ApplicationCreateSchema) -> Application:
@@ -36,22 +62,14 @@ class ApplicationControllerAPI:
         # Get the helper profile
         helper = get_object_or_404(HelperModel, user_id=user.id)
 
-        # Get the vacancy
-        vacancy = get_object_or_404(Vacancy, id=data.vacancy_id)
-
         # Validate start_date and end_date
         if data.start_date > data.end_date:
             raise Http400BadRequestException("Start date cannot be after end date")
 
-        # Check if the requested dates fall within any of the vacancy's availability periods with enough capacity
-        from features.host.models import VacancyAvailability  # noqa: PLC0415
+        vacancy, valid_availability = self._resolve_vacancy_and_availability(data)
 
-        valid_availability = VacancyAvailability.objects.filter(
-            vacancy=vacancy,
-            start_date__lte=data.start_date,
-            end_date__gte=data.end_date,
-            current_helpers__lt=F("capacity"),
-        ).first()
+        if not vacancy:
+            raise Http400BadRequestException("No recruiting vacancy found for this host")
 
         if not valid_availability:
             raise Http400BadRequestException(
@@ -70,7 +88,7 @@ class ApplicationControllerAPI:
             application.save(user=user)
         except IntegrityError:
             # Duplicate application (unique_together constraint)
-            raise DuplicateKeyException(ApplicationAlreadyExistsError, data.vacancy_id)
+            raise DuplicateKeyException(ApplicationAlreadyExistsError, str(vacancy.id))
         else:
             return application
 

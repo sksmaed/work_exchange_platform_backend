@@ -13,7 +13,7 @@ from features.host.schemas import VacancyResponseSchema
 class ApplicationCreateSchema(Schema):
     """Schema for creating an application."""
 
-    vacancy_id: str
+    host_id: str
     start_date: date
     end_date: date
 

@@ -49,12 +49,13 @@ class TestApplicationAPI:
     def test_create_application_success(
         self,
         authenticated_helper_client: Client,
+        test_host: Host,
         test_vacancy: Vacancy,
         test_vacancy_availability: VacancyAvailability,
         helper_model,
     ):
         """Helper applies within the valid availability period."""
-        payload = {"vacancy_id": str(test_vacancy.id), "start_date": "2025-05-10", "end_date": "2025-05-20"}
+        payload = {"host_id": str(test_host.id), "start_date": "2025-05-10", "end_date": "2025-05-20"}
         response = authenticated_helper_client.post(
             "/api/applications/",
             data=json.dumps(payload),
@@ -67,12 +68,13 @@ class TestApplicationAPI:
     def test_create_application_invalid_dates(
         self,
         authenticated_helper_client: Client,
+        test_host: Host,
         test_vacancy: Vacancy,
         test_vacancy_availability: VacancyAvailability,
     ):
         """Helper applies outside of the valid availability period."""
         payload = {
-            "vacancy_id": str(test_vacancy.id),
+            "host_id": str(test_host.id),
             "start_date": "2025-04-20",  # Starts before availability
             "end_date": "2025-05-10",
         }
@@ -89,6 +91,7 @@ class TestApplicationAPI:
     def test_create_application_full_capacity(
         self,
         authenticated_helper_client: Client,
+        test_host: Host,
         test_vacancy: Vacancy,
         test_vacancy_availability: VacancyAvailability,
     ):
@@ -97,7 +100,7 @@ class TestApplicationAPI:
         test_vacancy_availability.current_helpers = 2
         test_vacancy_availability.save()
 
-        payload = {"vacancy_id": str(test_vacancy.id), "start_date": "2025-05-10", "end_date": "2025-05-20"}
+        payload = {"host_id": str(test_host.id), "start_date": "2025-05-10", "end_date": "2025-05-20"}
         response = authenticated_helper_client.post(
             "/api/applications/",
             data=json.dumps(payload),
@@ -130,14 +133,14 @@ class TestApplicationAPI:
 
         url = f"/api/applications/{application.id}/status"
         payload = {"status": Application.StatusChoices.ACCEPTED}
-        
+
         response = authenticated_host_client.patch(
             url,
             data=json.dumps(payload),
             content_type="application/json",
         )
         assert response.status_code == 200
-        
+
         test_vacancy_availability.refresh_from_db()
         assert test_vacancy_availability.current_helpers == 1
 
@@ -163,7 +166,7 @@ class TestApplicationAPI:
 
         url = f"/api/applications/{application.id}/status"
         payload = {"status": Application.StatusChoices.ACCEPTED}
-        
+
         response = authenticated_host_client.patch(
             url,
             data=json.dumps(payload),
@@ -195,9 +198,9 @@ class TestApplicationAPI:
         url = f"/api/applications/{application.id}"
         response = authenticated_helper_client.delete(url)
         assert response.status_code == 200
-        
+
         test_vacancy_availability.refresh_from_db()
         assert test_vacancy_availability.current_helpers == 0
-        
+
         application.refresh_from_db()
         assert application.status == Application.StatusChoices.WITHDRAWN
