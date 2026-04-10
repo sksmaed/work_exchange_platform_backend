@@ -27,6 +27,13 @@ class HostResponseSchema(ModelSchema):
         )
 
     @staticmethod
+    def resolve_host_image(obj: Host) -> str | None:
+        """Return full URL for host image (supports Cloudinary and local storage)."""
+        if obj.host_image:
+            return obj.host_image.url
+        return None
+
+    @staticmethod
     def _month_iter(start: date, end: date) -> list[int]:
         if not start or not end:
             return []
@@ -116,6 +123,13 @@ class HostBriefSchema(ModelSchema):
     class Meta:
         model = Host
         fields = ("id", "user", "name", "address", "type", "avg_rating", "host_image")
+
+    @staticmethod
+    def resolve_host_image(obj: Host) -> str | None:
+        """Return full URL for host image (supports Cloudinary and local storage)."""
+        if obj.host_image:
+            return obj.host_image.url
+        return None
 
 
 class VacancyAvailabilitySchema(ModelSchema):

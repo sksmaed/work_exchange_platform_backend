@@ -41,9 +41,20 @@ ALLOWED_HOSTS = env.list(
 AUTH_USER_MODEL = "core.User"
 
 # Storage
+# Cloudinary configuration
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": env("CLOUDINARY_CLOUD_NAME", default=""),
+    "API_KEY": env("CLOUDINARY_API_KEY", default=""),
+    "API_SECRET": env("CLOUDINARY_API_SECRET", default=""),
+}
+
+_use_cloudinary = bool(CLOUDINARY_STORAGE["CLOUD_NAME"])
+
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"
+        if _use_cloudinary
+        else "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -76,6 +87,8 @@ APPS = [
     "ninja_extra",
     "guardian",
     "channels",
+    "cloudinary_storage",
+    "cloudinary",
 ]
 LOCAL_APPS = [
     "features.core",
