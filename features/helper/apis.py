@@ -127,16 +127,32 @@ class HelperControllerAPI:
 
         update_data = data.model_dump(exclude_unset=True)
 
+        # Handle user-level fields (name, phone) separately
+        user_fields = {}
+        for field in ("name", "phone"):
+            if field in update_data:
+                user_fields[field] = update_data.pop(field)
+
+        if user_fields:
+            for field, value in user_fields.items():
+                setattr(user, field, value)
+            user.save(update_fields=list(user_fields.keys()))
+
         if "expected_time_periods" in update_data and update_data["expected_time_periods"] is not None:
             update_data["expected_time_periods"] = [
                 {"start_date": tp["start_date"].isoformat(), "end_date": tp["end_date"].isoformat()}
                 for tp in update_data["expected_time_periods"]
             ]
 
-        for field, value in update_data.items():
-            setattr(helper, field, value)
+        # gender column is NOT NULL in DB; coerce None to empty string
+        if "gender" in update_data and update_data["gender"] is None:
+            update_data["gender"] = ""
 
-        helper.save(user=user, update_fields=list(update_data.keys()))
+        if update_data:
+            for field, value in update_data.items():
+                setattr(helper, field, value)
+            helper.save(user=user, update_fields=list(update_data.keys()))
+
         return self._helper_to_dict(helper)
 
     @route.post("/self/avatar", response=HelperProfileResponseSchema)

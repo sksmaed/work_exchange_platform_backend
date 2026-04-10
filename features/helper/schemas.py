@@ -47,6 +47,10 @@ class HelperProfileCreateSchema(Schema):
 class HelperProfileUpdateSchema(Schema):
     """Schema for updating a helper profile."""
 
+    # User-level fields (stored on User model, not HelperModel)
+    name: str | None = None
+    phone: str | None = None
+
     description: str | None = None
     birthday: date | None = None
     gender: str | None = None

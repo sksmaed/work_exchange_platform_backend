@@ -8,6 +8,7 @@ class UserSimpleResponseSchema(Schema):
     """User simple response schema."""
 
     id: UUID
+    name: str
     username: str
     email: str
 

@@ -242,7 +242,7 @@ class PostActionControllerAPI:
             post.save(user=request.user)
 
         user_schema = UserSimpleResponseSchema(
-            id=request.user.id, username=request.user.username, email=request.user.email
+            id=request.user.id, name=request.user.name or request.user.email, username=request.user.username, email=request.user.email
         )
         return {
             "data": CommentResponseSchema(
@@ -279,7 +279,7 @@ class PostActionControllerAPI:
             CommentResponseSchema(
                 id=c.id,
                 post_id=c.post_id,
-                user=UserSimpleResponseSchema(id=c.user.id, username=c.user.username, email=c.user.email),
+                user=UserSimpleResponseSchema(id=c.user.id, name=c.user.name or c.user.email, username=c.user.username, email=c.user.email),
                 parent_id=c.parent_id,
                 content=c.content,
                 created_at=c.created_at,

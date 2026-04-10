@@ -227,7 +227,7 @@ class HostReviewResponseSchema(ModelSchema):
     @staticmethod
     def resolve_reviewer_name(obj: HostReview) -> str:
         """Return reviewer's display name."""
-        return obj.reviewer.username
+        return obj.reviewer.name or obj.reviewer.email
 
     @staticmethod
     def resolve_reviewer_avatar(obj: HostReview) -> str | None:
