@@ -27,11 +27,21 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
     """Adds user_type to the user object returned in login/registration responses."""
 
     user_type = serializers.CharField(read_only=True)
+    # Google/social providers populate first_name/last_name via allauth; our API only
+    # exposed `name`, so merge for display when `name` is blank (avoids clients falling back to email).
+    name = serializers.SerializerMethodField()
 
     class Meta(UserDetailsSerializer.Meta):
         # Explicitly export only the fields we want the client to receive.
         # Remove Django's default first_name/last_name from the API output.
         fields = ("pk", "email", "name", "phone", "user_type")
+
+    def get_name(self, obj: User) -> str:
+        stored = (getattr(obj, "name", "") or "").strip()
+        if stored:
+            return stored
+        combined = f"{obj.first_name or ''} {obj.last_name or ''}".strip()
+        return combined
 
 
 class CustomSocialLoginSerializer(SocialLoginSerializer):
