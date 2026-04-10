@@ -5,6 +5,7 @@ from django.core.files.base import ContentFile
 from django.core.handlers.wsgi import WSGIRequest
 from django.db import transaction
 from django.db.models import Exists, F, OuterRef, Q, QuerySet
+from ninja import File, UploadedFile
 from ninja_extra import api_controller, route
 from ninja_extra.ordering import Ordering, ordering
 from ninja_extra.pagination import PageNumberPagination, paginate
@@ -35,6 +36,7 @@ from features.host.schemas import (
 )
 
 _MAX_REVIEW_IMAGE_BYTES = 2 * 1024 * 1024
+_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 _DATA_URL_RE = re.compile(
     r"^data:image/(jpeg|jpg|png|gif|webp);base64,(.+)$",
     re.IGNORECASE | re.DOTALL,
@@ -187,6 +189,37 @@ class HostControllerAPI:
             setattr(host, field, value)
 
         host.save(user=user, update_fields=list(update_data.keys()))
+        return host
+
+    @route.post("/{host_id}/host-image", response=HostResponseSchema)
+    def upload_host_image(
+        self,
+        request: WSGIRequest,
+        host_id: str,
+        image: UploadedFile = File(...),
+    ) -> Host:
+        """Upload or replace host cover image."""
+        user = request.user
+        try:
+            host = Host.objects.get(id=host_id)
+        except Host.DoesNotExist:
+            raise KeyNotFoundException(HostNotFoundError, host_id)
+
+        if host.user != user:
+            raise Http403ForbiddenException("You do not have permission to update this host")
+
+        content_type = getattr(image, "content_type", "") or ""
+        if content_type not in _ALLOWED_IMAGE_TYPES:
+            raise Http400BadRequestException(
+                [
+                    ErrorDetail(
+                        ErrorCode("host", "invalid_image"),
+                        {"message": "Only JPEG, PNG, GIF, and WebP images are allowed"},
+                    )
+                ]
+            )
+
+        host.host_image.save(image.name, image, save=True)
         return host
 
     @route.delete("/{host_id}")
