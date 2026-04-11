@@ -138,6 +138,20 @@ class HostControllerAPI:
             .order_by("-created_at")
         )
 
+    @route.get(
+        "/me",
+        response={200: NinjaPaginationResponseSchema[HostResponseSchema]},
+    )
+    @paginate(PageNumberPagination)
+    def my_hosts(self, request: WSGIRequest) -> QuerySet[Host]:
+        """Return only hosts owned by the authenticated user."""
+        return (
+            Host.objects.filter(user=request.user)
+            .select_related("user")
+            .prefetch_related("vacancy_set__availabilities")
+            .order_by("-created_at")
+        )
+
     @route.post("", response=HostResponseSchema)
     def create_host(self, request: WSGIRequest, data: HostCreateSchema) -> Host:
         """Create a new host entry."""
