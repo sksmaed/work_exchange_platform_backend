@@ -350,6 +350,37 @@ class HostControllerAPI:
 
         return vacancy
 
+    @route.post("/vacancies/{vacancy_id}/vacancy-image", response=VacancyResponseSchema)
+    def upload_vacancy_image(
+        self,
+        request: WSGIRequest,
+        vacancy_id: str,
+        image: UploadedFile = File(...),
+    ) -> Vacancy:
+        """Upload or replace vacancy image."""
+        user = request.user
+        try:
+            vacancy = Vacancy.objects.select_related("host").get(id=vacancy_id)
+        except Vacancy.DoesNotExist:
+            raise KeyNotFoundException(VacancyNotFoundError, vacancy_id)
+
+        if vacancy.host.user != user:
+            raise Http403ForbiddenException("You do not have permission to update this vacancy")
+
+        content_type = getattr(image, "content_type", "") or ""
+        if content_type not in _ALLOWED_IMAGE_TYPES:
+            raise Http400BadRequestException(
+                [
+                    ErrorDetail(
+                        ErrorCode("host", "invalid_image"),
+                        {"message": "Only JPEG, PNG, GIF, and WebP images are allowed"},
+                    )
+                ]
+            )
+
+        vacancy.vacancy_image.save(image.name, image, save=True)
+        return vacancy
+
     @route.delete("/vacancies/{vacancy_id}")
     def delete_vacancy(self, request: WSGIRequest, vacancy_id: str) -> dict:
         """Delete a vacancy."""

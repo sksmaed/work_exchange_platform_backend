@@ -153,6 +153,13 @@ class VacancyResponseSchema(ModelSchema):
             "updated_by_user",
         )
 
+    @staticmethod
+    def resolve_vacancy_image(obj: Vacancy) -> str | None:
+        """Return full URL for vacancy image."""
+        if obj.vacancy_image:
+            return obj.vacancy_image.url
+        return None
+
 
 class VacancyCreateSchema(Schema):
     """Schema for creating a new Vacancy."""
