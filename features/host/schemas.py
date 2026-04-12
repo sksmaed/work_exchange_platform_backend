@@ -85,7 +85,7 @@ class HostCreateSchema(Schema):
     address: str | None = ""
     type: str | None = ""
     phone_number: str | None = ""
-    contact_information: str | None = ""
+    contact_information: list[dict[str, typing.Any]] = Field(default_factory=list)
     pocket_money: int | None = 0
     meals_offered: str | None = ""
     dayoffs: str | None = ""
@@ -105,7 +105,7 @@ class HostUpdateSchema(Schema):
     type: str | None = None
     address: str | None = None
     phone_number: str | None = None
-    contact_information: str | None = None
+    contact_information: list[dict[str, typing.Any]] | None = None
     pocket_money: int | None = None
     meals_offered: str | None = None
     dayoffs: str | None = None

@@ -163,7 +163,7 @@ class HostControllerAPI:
             address=data.address or "",
             type=data.type or "",
             phone_number=data.phone_number or "",
-            contact_information=data.contact_information or "",
+            contact_information=data.contact_information or [],
             pocket_money=data.pocket_money or 0,
             meals_offered=data.meals_offered or "",
             dayoffs=data.dayoffs or "",

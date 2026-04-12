@@ -25,8 +25,8 @@ class Host(BaseModel):
         Type of host.
     phone_number : CharField
         Phone number of the host.
-    contact_information : TextField
-        Contact information for the host.
+    contact_information : JSONField
+        Structured contact/social links for the host.
     pocket_money : IntegerField
         Pocket money offered by the host.
     meals_offered : CharField
@@ -74,9 +74,9 @@ class Host(BaseModel):
     phone_number = models.CharField(
         max_length=15,
     )
-    contact_information = models.TextField(
+    contact_information = models.JSONField(
         blank=True,
-        default="",
+        default=list,
     )
     description = models.TextField()
     pocket_money = models.IntegerField(
