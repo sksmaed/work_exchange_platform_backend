@@ -26,6 +26,69 @@ def test_user(django_user_model):
 
 @pytest.mark.django_db
 class TestHelperProfileAPI:
+    def test_get_helper_profile_by_id_success(self, client, test_user):
+        helper = HelperModel(
+            user=test_user,
+            description="Profile",
+            birthday="2000-01-01",
+            gender="F",
+        )
+        helper.save(user=test_user)
+
+        response = client.get(f"/api/helpers/{helper.id}/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(helper.id)
+        assert data["user_id"] == str(test_user.id)
+
+    def test_get_helper_profile_by_id_not_found(self, client):
+        response = client.get("/api/helpers/0d86218a-7fce-461b-ad6c-42ff27c90028/")
+
+        assert response.status_code == 404
+
+    def test_list_helpers_supports_page_size(self, client, django_user_model):
+        for i in range(3):
+            user = django_user_model.objects.create_user(
+                username=f"helper{i}",
+                email=f"helper{i}@example.com",
+                password="password123",
+                user_type=django_user_model.UserTypeChoices.HELPER,
+            )
+            helper = HelperModel(
+                user=user,
+                description=f"Helper {i}",
+                birthday="2000-01-01",
+                gender="F",
+            )
+            helper.save(user=user)
+
+        response = client.get("/api/helpers/?page_size=2")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        assert data["page"] == 1
+        assert data["page_size"] == 2
+        assert data["has_next"] is True
+        assert len(data["helpers"]) == 2
+
+    def test_list_helpers_allow_anonymous_access(self, client, test_user):
+        helper = HelperModel(
+            user=test_user,
+            description="Profile",
+            birthday="2000-01-01",
+            gender="F",
+        )
+        helper.save(user=test_user)
+
+        response = client.get("/api/helpers/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] >= 1
+        assert isinstance(data["helpers"], list)
+
     def test_create_helper_profile_success(self, client, test_user):
         client.force_login(test_user)
         url = "/api/helpers/"

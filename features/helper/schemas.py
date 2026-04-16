@@ -109,3 +109,13 @@ class HelperPhotoUploadResponseSchema(Schema):
     """Schema for helper photo upload response."""
 
     image_urls: list[str]
+
+
+class HelperListResponseSchema(Schema):
+    """Schema for paginated helper profile list response."""
+
+    helpers: list[HelperProfileResponseSchema]
+    total: int
+    page: int
+    page_size: int
+    has_next: bool

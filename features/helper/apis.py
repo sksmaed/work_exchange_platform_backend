@@ -1,9 +1,11 @@
 from typing import ClassVar
 
+from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
+from django.core.paginator import Paginator
 from ninja import File, UploadedFile
 from ninja_extra import api_controller, route
-from ninja_extra.permissions import IsAuthenticated
+from ninja_extra.permissions import AllowAny, IsAuthenticated
 
 from common.exceptions import (
     DuplicateKeyException,
@@ -15,6 +17,7 @@ from common.exceptions import (
 from features.helper.exceptions import HelperNotFoundError
 from features.helper.models import HelperModel, HelperPhoto
 from features.helper.schemas import (
+    HelperListResponseSchema,
     HelperPhotoUploadResponseSchema,
     HelperProfileCreateSchema,
     HelperProfileResponseSchema,
@@ -26,6 +29,7 @@ from features.helper.schemas import (
 class HelperControllerAPI:
     """API endpoints for managing helper profiles."""
 
+    MAX_PAGE_SIZE: ClassVar[int] = 100
     ALLOWED_IMAGE_TYPES: ClassVar[set[str]] = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
     def _get_self_helper(self, request: WSGIRequest) -> HelperModel:
@@ -81,6 +85,33 @@ class HelperControllerAPI:
             "avatar_url": helper.user.avatar.url if helper.user.avatar else None,
             "photos": photos,
         }
+
+    @route.get("/", response=HelperListResponseSchema, auth=None, permissions=[AllowAny])
+    def list_helpers(self, request: WSGIRequest, page: int = 1, page_size: int = 20) -> HelperListResponseSchema:  # noqa: ARG002
+        """List helpers with simple page/page_size pagination."""
+        page_size = min(page_size, self.MAX_PAGE_SIZE)
+
+        queryset = HelperModel.objects.select_related("user").prefetch_related("photos").order_by("-created_at")
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+        helpers = [self._helper_to_dict(helper) for helper in page_obj.object_list]
+
+        return HelperListResponseSchema(
+            helpers=helpers,
+            total=paginator.count,
+            page=page,
+            page_size=page_size,
+            has_next=page_obj.has_next(),
+        )
+
+    @route.get("/{helper_id}/", response=HelperProfileResponseSchema, auth=None, permissions=[AllowAny])
+    def get_helper_profile(self, request: WSGIRequest, helper_id: str) -> dict:  # noqa: ARG002
+        """Retrieve a helper profile by helper ID."""
+        try:
+            helper = HelperModel.objects.select_related("user").prefetch_related("photos").get(id=helper_id)
+        except (HelperModel.DoesNotExist, ValidationError):
+            raise KeyNotFoundException(HelperNotFoundError, helper_id)
+        return self._helper_to_dict(helper)
 
     @route.get("/self/", response=HelperProfileResponseSchema)
     def get_self_profile(self, request: WSGIRequest) -> dict:
