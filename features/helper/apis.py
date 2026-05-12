@@ -1,4 +1,5 @@
-from typing import ClassVar
+from datetime import date, datetime
+from typing import Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
@@ -31,6 +32,39 @@ class HelperControllerAPI:
 
     MAX_PAGE_SIZE: ClassVar[int] = 100
     ALLOWED_IMAGE_TYPES: ClassVar[set[str]] = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+    def _normalize_time_value(self, value: any) -> str:  # noqa: PLR0911
+        """Return ISO date string when parseable, otherwise keep original text."""
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return value
+            try:
+                return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+            except ValueError:
+                try:
+                    return date.fromisoformat(text).isoformat()
+                except ValueError:
+                    return value
+        return str(value)
+
+    def _normalize_expected_time_periods(self, periods: list[dict[str, Any]]) -> list[dict[str, str]]:
+        """Normalize time period payload while preserving non-parseable strings."""
+        normalized: list[dict[str, str]] = []
+        for tp in periods:
+            if not isinstance(tp, dict):
+                continue
+            normalized.append(
+                {
+                    "start_date": self._normalize_time_value(tp.get("start_date", "")),
+                    "end_date": self._normalize_time_value(tp.get("end_date", "")),
+                }
+            )
+        return normalized
 
     def _get_self_helper(self, request: WSGIRequest) -> HelperModel:
         """Return current user's helper profile or raise 404."""
@@ -104,50 +138,10 @@ class HelperControllerAPI:
             has_next=page_obj.has_next(),
         )
 
-    @route.get("/{helper_id}/", response=HelperProfileResponseSchema, auth=None, permissions=[AllowAny])
-    def get_helper_profile(self, request: WSGIRequest, helper_id: str) -> dict:  # noqa: ARG002
-        """Retrieve a helper profile by helper ID."""
-        try:
-            helper = HelperModel.objects.select_related("user").prefetch_related("photos").get(id=helper_id)
-        except (HelperModel.DoesNotExist, ValidationError):
-            raise KeyNotFoundException(HelperNotFoundError, helper_id)
-        return self._helper_to_dict(helper)
-
     @route.get("/self/", response=HelperProfileResponseSchema)
     def get_self_profile(self, request: WSGIRequest) -> dict:
         """Retrieve the authenticated user's helper profile."""
         helper = self._get_self_helper(request)
-        return self._helper_to_dict(helper)
-
-    @route.post("/", response={201: HelperProfileResponseSchema})
-    def create_helper_profile(self, request: WSGIRequest, data: HelperProfileCreateSchema) -> dict:
-        """Create a new helper profile for the authenticated user."""
-        user = request.user
-
-        if HelperModel.objects.filter(user=user).exists():
-            raise DuplicateKeyException(ValueError, "Helper profile already exists")
-
-        time_periods = [
-            {"start_date": tp.start_date.isoformat(), "end_date": tp.end_date.isoformat()}
-            for tp in (data.expected_time_periods or [])
-        ]
-
-        helper = HelperModel(
-            user=user,
-            description=data.description,
-            birthday=data.birthday,
-            gender=data.gender,
-            residence=data.residence or "",
-            expected_place=data.expected_place or [],
-            expected_time_periods=time_periods,
-            expected_treatments=data.expected_treatments or [],
-            personality=data.personality or "",
-            motivation=data.motivation or "",
-            hobbies=data.hobbies or "",
-            licenses=data.licenses or HelperModel.LicenseChoices.NONE,
-            languages=data.languages or [],
-        )
-        helper.save(user=user)
         return self._helper_to_dict(helper)
 
     @route.patch("/self/", response=HelperProfileResponseSchema)
@@ -170,10 +164,9 @@ class HelperControllerAPI:
             user.save(update_fields=list(user_fields.keys()))
 
         if "expected_time_periods" in update_data and update_data["expected_time_periods"] is not None:
-            update_data["expected_time_periods"] = [
-                {"start_date": tp["start_date"].isoformat(), "end_date": tp["end_date"].isoformat()}
-                for tp in update_data["expected_time_periods"]
-            ]
+            update_data["expected_time_periods"] = self._normalize_expected_time_periods(
+                update_data["expected_time_periods"]
+            )
 
         # gender column is NOT NULL in DB; coerce None to empty string
         if "gender" in update_data and update_data["gender"] is None:
@@ -229,3 +222,42 @@ class HelperControllerAPI:
         photo.image.delete(save=False)
         photo.delete()
         return {"detail": "Photo deleted successfully"}
+
+    @route.get("/{helper_id}/", response=HelperProfileResponseSchema, auth=None, permissions=[AllowAny])
+    def get_helper_profile(self, request: WSGIRequest, helper_id: str) -> dict:  # noqa: ARG002
+        """Retrieve a helper profile by helper ID."""
+        try:
+            helper = HelperModel.objects.select_related("user").prefetch_related("photos").get(id=helper_id)
+        except (HelperModel.DoesNotExist, ValidationError):
+            raise KeyNotFoundException(HelperNotFoundError, helper_id)
+        return self._helper_to_dict(helper)
+
+    @route.post("/", response={201: HelperProfileResponseSchema})
+    def create_helper_profile(self, request: WSGIRequest, data: HelperProfileCreateSchema) -> dict:
+        """Create a new helper profile for the authenticated user."""
+        user = request.user
+
+        if HelperModel.objects.filter(user=user).exists():
+            raise DuplicateKeyException(ValueError, "Helper profile already exists")
+
+        time_periods = self._normalize_expected_time_periods(
+            [tp.model_dump() for tp in (data.expected_time_periods or [])]
+        )
+
+        helper = HelperModel(
+            user=user,
+            description=data.description,
+            birthday=data.birthday,
+            gender=data.gender,
+            residence=data.residence or "",
+            expected_place=data.expected_place or [],
+            expected_time_periods=time_periods,
+            expected_treatments=data.expected_treatments or [],
+            personality=data.personality or "",
+            motivation=data.motivation or "",
+            hobbies=data.hobbies or "",
+            licenses=data.licenses or HelperModel.LicenseChoices.NONE,
+            languages=data.languages or [],
+        )
+        helper.save(user=user)
+        return self._helper_to_dict(helper)

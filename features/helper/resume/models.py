@@ -14,7 +14,7 @@ class HelperResume(BaseModel):
     summary = models.TextField(blank=True, default="")
 
     # Experience and skills
-    experiences = models.JSONField(blank=True, default=list)
+    experiences = ArrayField(models.CharField(max_length=500), blank=True, default=list)
     skills = ArrayField(models.CharField(max_length=100), blank=True, default=list)
     certifications = models.JSONField(blank=True, default=list)
 

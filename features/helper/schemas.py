@@ -9,13 +9,19 @@ from pydantic import model_validator
 class TimePeriodSchema(Schema):
     """Schema representing a generic time period."""
 
-    start_date: date
-    end_date: date
+    start_date: date | datetime | str
+    end_date: date | datetime | str
 
     @model_validator(mode="after")
     def validate_dates(self) -> "TimePeriodSchema":
-        """Ensure start_date is not after end_date."""
-        if self.start_date > self.end_date:
+        """Validate date order only when both values are parseable dates."""
+        start = self.start_date
+        end = self.end_date
+
+        if isinstance(start, str) or isinstance(end, str):
+            return self
+
+        if start > end:
             raise ValueError("start_date cannot be after end_date")
         return self
 

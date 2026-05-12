@@ -4,9 +4,11 @@ from ninja import Schema
 
 
 class ResumeBase(Schema):
+    """Base schema for helper resumes, with all fields optional for flexibility in create/update operations."""
+
     title: str | None = None
     summary: str | None = None
-    experiences: list[dict[str, Any]] | None = None
+    experiences: list[str] | None = None
     skills: list[str] | None = None
     certifications: list[str] | None = None
     availability: list[dict[str, Any]] | None = None
@@ -16,12 +18,14 @@ class ResumeBase(Schema):
 
 
 class ResumeCreate(ResumeBase):
-    pass
+    """Schema for creating a resume, where all fields are optional."""
 
 
 class ResumeUpdate(ResumeBase):
-    pass
+    """Schema for updating a resume, where all fields are optional."""
 
 
 class ResumeOut(ResumeBase):
-    id: str 
+    """Schema for outputting resume data, including the ID."""
+
+    id: str
